@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FBC · Founders and Builders Collective · BITS Pilani</title>
+  <meta name="description" content="Founders and Builders Collective: a student entrepreneurship community at BITS Pilani. Learn, connect, build, pitch." />
+  <link rel="icon" href="assets/logo.webp" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600&family=Caveat:wght@600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="cursor-glow" aria-hidden="true"></div>
+
+  <header class="nav" id="nav">
+    <div class="nav-inner">
+      <a href="#home" class="brand" aria-label="FBC home">
+        <span class="brand-mark">FBC<span class="dot"></span></span>
+        <span class="brand-sub">Founders &amp; Builders<br/>Collective</span>
+      </a>
+      <nav class="nav-links" id="navLinks">
+        <a href="#matchmaking" data-route="matchmaking">Matchmaking</a>
+        <a href="#validate" data-route="validate">Validate</a>
+        <a href="#opportunities" data-route="opportunities">Opportunities</a>
+        <a href="#events" data-route="events">Events</a>
+        <a href="#journal" data-route="journal">Journal</a>
+        <a href="#resources" data-route="resources">Resources</a>
+        <a href="#roadmap" data-route="roadmap">Roadmap</a>
+        <a href="#contact" data-route="contact">Contact</a>
+      </nav>
+      <div class="nav-actions" id="navActions"></div>
+      <button class="nav-toggle" id="navToggle" aria-label="Open menu"><span></span><span></span></button>
+    </div>
+  </header>
+
+  <main id="app" tabindex="-1"></main>
+
+  <footer class="footer">
+    <div class="container footer-grid">
+      <div>
+        <a href="#home" class="brand">
+          <span class="brand-mark">FBC<span class="dot"></span></span>
+        </a>
+        <p class="muted small mt-1">Ideas → People → Building.<br/>A student community at BITS Pilani.</p>
+        <p class="script gold mt-1">We want to learn entrepreneurship. Let's learn it together.</p>
+      </div>
+      <div>
+        <h4>Platform</h4>
+        <a href="#matchmaking">Co-founder matchmaking</a>
+        <a href="#validate">Validate your idea · VistaDex</a>
+        <a href="#opportunities">Opportunities</a>
+        <a href="#dashboard">Dashboard</a>
+      </div>
+      <div>
+        <h4>Community</h4>
+        <a href="#events">Events</a>
+        <a href="#journal">Journal &amp; newsletter</a>
+        <a href="#resources">Resources</a>
+        <a href="#roadmap">Roadmap</a>
+      </div>
+      <div>
+        <h4>Get in touch</h4>
+        <a href="#contact">Contact us</a>
+        <a href="https://chat.whatsapp.com/CgdFfY7ZBwIA0yCYVJ6MDE" target="_blank" rel="noopener">WhatsApp community</a>
+        <a href="https://forms.gle/7MAqWXS734hUsFnt9" target="_blank" rel="noopener">Join form</a>
+      </div>
+    </div>
+    <div class="container footer-bottom">
+      <span>© 2026 Founders and Builders Collective · BITS Pilani</span>
+      <span class="muted">Prototype v0.1 · sample data</span>
+    </div>
+  </footer>
+
+  <!-- Prototype-only: try different third accent colours -->
+  <div class="accent-switcher" id="accentSwitcher" title="Prototype: try accent colours">
+    <span class="as-label">Accent</span>
+    <button data-accent="teal" style="--c:#2EE6C5" aria-label="Teal"></button>
+    <button data-accent="ember" style="--c:#FF6B4A" aria-label="Ember"></button>
+    <button data-accent="violet" style="--c:#9B7BFF" aria-label="Violet"></button>
+    <button data-accent="ice" style="--c:#5CC8FF" aria-label="Ice blue"></button>
+  </div>
+
+  <div class="modal" id="modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <button class="modal-close" data-close aria-label="Close">✕</button>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
