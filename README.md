@@ -13,6 +13,9 @@ Plain HTML, CSS and JavaScript (ES modules). No build step: edit a file, push, d
 ## Pages
 `#home` · `#matchmaking` · `#validate` · `#opportunities` · `#events` · `#journal` (and `#journal-<post-id>`) · `#resources` · `#about` · `#contact` · `#join` · `#login` · `#onboarding` · `#dashboard` · `#admin`
 
+## After changing CSS or JS
+Run `npm run bump` (or `node tools/bump-version.mjs`) before pushing. It stamps a new `?v=` on every CSS/JS link so visitors' browsers fetch the new version instead of a cached one (GitHub Pages lets browsers cache files for 10 minutes).
+
 ## Code map
 | File | What it does |
 | --- | --- |
@@ -29,6 +32,6 @@ Plain HTML, CSS and JavaScript (ES modules). No build step: edit a file, push, d
 | `tests/rules.test.mjs` | 20 tests for the security rules (`npm run test:rules`) |
 
 ## Design
-One continuous warm-dark canvas with soft gold light, brand gold `#F2B630`, a code-built product preview in the hero, and a bento feature grid. Instrument Serif for headlines, Inter for text, IBM Plex Mono for labels. Gold is the only accent: hover, focus and active states use a slightly brighter gold (`#F5C04A`). The hero preview and feature tiles tilt toward the cursor on desktop.
+One continuous warm-dark canvas with soft gold light, brand gold `#F2B630`, a code-built product preview in the hero, and a bento feature grid. Instrument Serif for headlines, Inter for text, IBM Plex Mono for labels. Liquid-glass surfaces (frosted, translucent cards over slowly drifting gold light) are used everywhere, and cards tilt toward the cursor on desktop. Gold is the only accent: hover, focus and active states use a slightly brighter gold (`#F5C04A`). The hero preview and feature tiles tilt toward the cursor on desktop.
 
 Link previews use `assets/og.jpg` (1200×630). The `og:` tags in `index.html` point at the GitHub Pages address; update them if the site moves to a custom domain.

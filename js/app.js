@@ -2,11 +2,11 @@
    FBC website: router, pages, sign-in, onboarding, dashboard.
    Admin console lives in admin.js. Data access in db.js.
    ========================================================== */
-import { db, isAllowedEmail } from "./db.js";
-import * as C from "./content.js";
-import { aiPrompt, aiSample, parseAiReply, FIELD_LABEL, isFounder, roleName } from "./ai.js";
-import { S, $, $$, esc, fmtDate, parseDay, byDateDesc, upcoming, past, stageBar, avatar, dots, toast, openModal, closeModal, md, GOOGLE_ICON } from "./ui.js";
-import { adminView, adminActions, adminForms, adminChange } from "./admin.js";
+import { db, isAllowedEmail } from "./db.js?v=202611230611";
+import * as C from "./content.js?v=202611230611";
+import { aiPrompt, aiSample, parseAiReply, FIELD_LABEL, isFounder, roleName } from "./ai.js?v=202611230611";
+import { S, $, $$, esc, fmtDate, parseDay, byDateDesc, upcoming, past, stageBar, avatar, dots, toast, openModal, closeModal, md, GOOGLE_ICON, ICON } from "./ui.js?v=202611230611";
+import { adminView, adminActions, adminForms, adminChange } from "./admin.js?v=202611230611";
 
 const app = $("#app");
 const views = {};
@@ -253,12 +253,12 @@ async function ventureModal(id) {
     <p class="small mt-1">${esc(v.founderName || "")}${v.founderYear ? ", " + esc(v.founderYear) : ""}</p>
     <p class="mt-3" style="color:var(--text)">${esc(v.pitch)}</p>
     ${v.problem ? `<p class="mt-2">${esc(v.problem)}</p>` : ""}
-    <table class="table mt-3"><tbody>
+    <div class="table-wrap mt-3"><table class="table"><tbody>
       <tr><td>Stage</td><td>${stageBar(v.stage)}${esc(C.STAGES[v.stage] || "")}</td></tr>
       <tr><td>Looking for</td><td>${esc((v.needs || []).join(", "))}</td></tr>
       ${v.commitment ? `<tr><td>Commitment</td><td>${esc(v.commitment)}</td></tr>` : ""}
       ${v.equity ? `<tr><td>Equity</td><td>${esc(v.equity)}</td></tr>` : ""}
-    </tbody></table>
+    </tbody></table></div>
     ${action}`);
 }
 
@@ -719,10 +719,13 @@ views.dashboard = async () => {
   const tabs = founder
     ? [["overview", "Overview"], ["venture", "My venture"], ["applications", "Applicants", count(received, "new") || received.length], ["matches", "Builders for you"], ["events", "My events", rsvps.length], ["ideas", "Idea checks", checks.length], ["profile", "My profile"]]
     : [["overview", "Overview"], ["applications", "Applications", sent.length], ["teams", "My teams", myTeams.length], ["matches", "Ventures for you"], ["events", "My events", rsvps.length], ["ideas", "Idea checks", checks.length], ["profile", "My profile"]];
+  const summary = founder
+    ? (venture ? `<b>${esc(venture.name)}</b> is ${statusLabel(venture.status).toLowerCase()} · ${count(received, "new")} new applicant${count(received, "new") === 1 ? "" : "s"} · team of ${team.length + 1}` : "List your venture to start receiving applicants.")
+    : `${count(sent, "new") + count(sent, "reviewing")} application${count(sent, "new") + count(sent, "reviewing") === 1 ? "" : "s"} waiting · ${myTeams.length ? `on <b>${myTeams.length}</b> team${myTeams.length === 1 ? "" : "s"}` : "no teams yet"} · ${nextEvent ? `next event <b>${fmtDate(nextEvent.date, { day: "numeric", month: "short" })}</b>` : "no events booked"}`;
 
   /* --- pieces --- */
   const breakdown = (arr) => `<div class="stats" style="grid-template-columns:repeat(4,1fr)">${APP_STATES.map((s) => `<div class="stat"><span class="label">${statusLabel(s)}</span><b>${count(arr, s)}</b></div>`).join("")}</div>`;
-  const matchList = matches.length ? `<div class="list">${matches.map((m) => founder
+  const matchList = matches.length ? `<div class="list boxed">${matches.map((m) => founder
     ? `<div class="list-row" style="grid-template-columns:auto 1fr auto auto">${avatar(m.name, m.photo)}<div><span class="title">${esc(m.name)}</span> <span class="xs faint">${esc(m.year || "")}</span><div class="tagline">${(m.skills || []).map((s) => needs.includes(s) ? `<span class="gold">${esc(s)}</span>` : esc(s)).join(", ")}</div></div><span class="match">${m.score}%</span><button class="btn btn-sm" data-act="invite" data-name="${esc(m.name)}" data-email="${esc(m.email || "")}">Invite</button></div>`
     : `<button class="list-row" style="grid-template-columns:1fr auto auto" data-act="venture" data-id="${esc(m.id)}"><div><span class="title">${esc(m.name)}</span><div class="tagline">Needs ${(m.needs || []).map((s) => mine.has(s) ? `<span class="gold">${esc(s)}</span>` : esc(s)).join(", ")}</div></div><span class="match">${m.score}%</span><span class="go">→</span></button>`).join("")}</div>
     <p class="hint mt-2">Match % is based on overlapping skills and domains. <span class="gold">Gold</span> means a skill you ${founder ? "need" : "have"}.</p>`
@@ -730,14 +733,14 @@ views.dashboard = async () => {
 
   const receivedList = (filter) => {
     const rows = received.filter((a) => !filter || a.status === filter).sort(byDateDesc("createdAt"));
-    return rows.length ? `<div class="list">${rows.map((a) => `
+    return rows.length ? `<div class="list boxed">${rows.map((a) => `
       <div class="list-row" style="grid-template-columns:auto 1fr auto">${avatar(a.applicantName)}<div><span class="title">${esc(a.applicantName)}</span> <span class="xs faint">${esc(a.applicantYear || "")} · ${fmtDate(a.createdAt)}</span>
         <div class="tagline">${esc((a.applicantSkills || []).join(", "))}</div><p class="small mt-1" style="color:var(--text)">${esc(a.message)}</p>
         <p class="xs mt-1"><button class="link" data-act="copy-text" data-text="${esc(a.applicantEmail)}">${esc(a.applicantEmail)}</button></p></div>
         <select class="input" style="width:auto;height:32px" data-act-change="app-status" data-id="${esc(a.id)}" aria-label="Status">${APP_STATES.map((s) => `<option value="${s}" ${a.status === s ? "selected" : ""}>${statusLabel(s)}</option>`).join("")}</select></div>`).join("")}</div>`
       : `<div class="empty">${filter ? "None here." : `No applications yet. They'll appear here when builders apply to ${esc(venture?.name || u.vname || "your venture")}.`}</div>`;
   };
-  const sentList = (rows) => rows.length ? `<div class="list">${rows.sort(byDateDesc("createdAt")).map((a) => `
+  const sentList = (rows) => rows.length ? `<div class="list boxed">${rows.sort(byDateDesc("createdAt")).map((a) => `
       <div class="list-row" style="grid-template-columns:1fr auto auto"><div><button class="title link" style="text-decoration:none" data-act="venture" data-id="${esc(a.ventureId)}">${esc(a.ventureName)}</button><div class="tagline">Applied ${fmtDate(a.createdAt)}${a.updatedAt && a.status !== "new" ? ` · updated ${fmtDate(a.updatedAt)}` : ""}</div></div>
         <span class="status ${a.status}">${statusLabel(a.status)}</span>${a.status === "accepted" ? `<span></span>` : `<button class="icon-btn" data-act="withdraw" data-id="${esc(a.id)}">Withdraw</button>`}</div>`).join("")}</div>`
     : `<div class="empty">You haven't applied anywhere yet. <a class="link" href="#matchmaking">Browse ventures</a></div>`;
@@ -763,15 +766,15 @@ views.dashboard = async () => {
     <div class="grid g2 mt-4" style="gap:3rem;align-items:start">
       <div>
         <span class="label">Team coverage</span>
-        <table class="table mt-2"><tbody>
+        <div class="table-wrap mt-2"><table class="table"><tbody>
           <tr><td>Covered by your team</td><td>${needs.filter((n) => covered.has(n)).map(esc).join(", ") || "Nothing yet"}</td></tr>
           <tr><td>Still looking for</td><td>${stillOpen.length ? stillOpen.map((n) => `<span class="gold">${esc(n)}</span>`).join(", ") : "All covered"}</td></tr>
           <tr><td>Pitch Night</td><td>${u.pitchnight ? "You've opted in" : `Not opted in. <button class="link" data-act="toggle-pitch">Opt in</button>`}</td></tr>
           ${nextEvent ? `<tr><td>Your next event</td><td>${esc(nextEvent.title)}, ${fmtDate(nextEvent.date, { day: "numeric", month: "short" })}</td></tr>` : ""}
-        </tbody></table>
+        </tbody></table></div>
       </div>
       <div><span class="label">Recent activity</span>
-        <div class="list mt-2">${activity.map((a) => `<div class="list-row" style="grid-template-columns:1fr auto;padding:.8rem 0"><span class="small" style="color:var(--text-2)">${a.text}</span><span class="xs faint">${fmtDate(a.when, { day: "numeric", month: "short" })}</span></div>`).join("")}</div></div>
+        <div class="list boxed mt-2">${activity.map((a) => `<div class="list-row" style="grid-template-columns:1fr auto;padding-block:.8rem"><span class="small" style="color:var(--text-2)">${a.text}</span><span class="xs faint">${fmtDate(a.when, { day: "numeric", month: "short" })}</span></div>`).join("")}</div></div>
     </div>` : `
     <div class="stats">
       <div class="stat"><span class="label">Applications</span><b>${sent.length}</b><p class="xs mt-1">${count(sent, "new") + count(sent, "reviewing")} waiting</p></div>
@@ -783,20 +786,20 @@ views.dashboard = async () => {
     <div class="grid g2 mt-4" style="gap:3rem;align-items:start">
       <div><div class="spread"><span class="label">Ventures that need you</span><button class="link small" data-act="dash-tab" data-tab="matches">See all</button></div><div class="mt-2">${matchList}</div></div>
       <div><span class="label">Recent activity</span>
-        <div class="list mt-2">${activity.map((a) => `<div class="list-row" style="grid-template-columns:1fr auto;padding:.8rem 0"><span class="small" style="color:var(--text-2)">${a.text}</span><span class="xs faint">${fmtDate(a.when, { day: "numeric", month: "short" })}</span></div>`).join("")}</div></div>
+        <div class="list boxed mt-2">${activity.map((a) => `<div class="list-row" style="grid-template-columns:1fr auto;padding-block:.8rem"><span class="small" style="color:var(--text-2)">${a.text}</span><span class="xs faint">${fmtDate(a.when, { day: "numeric", month: "short" })}</span></div>`).join("")}</div></div>
     </div>`;
   else if (tab === "venture") main = venture ? `
     <div class="grid g2" style="gap:3rem;align-items:start">
       <div>
         <span class="label">${esc((venture.domains || []).join(" · "))}</span><h2 class="mt-1">${esc(venture.name)}</h2>
         <p class="mt-2" style="color:var(--text)">${esc(venture.pitch)}</p>${venture.problem ? `<p class="mt-2">${esc(venture.problem)}</p>` : ""}
-        <table class="table mt-3"><tbody>
+        <div class="table-wrap mt-3"><table class="table"><tbody>
           <tr><td>Listing</td><td><span class="status ${venture.status}">${statusLabel(venture.status)}</span>${venture.status === "hidden" ? `<p class="xs mt-1">Hidden by an FBC admin. Write to us if this is a mistake.</p>` : ""}</td></tr>
           <tr><td>Stage</td><td><select class="input" style="width:auto;height:32px" data-act-change="set-stage" aria-label="Stage">${C.STAGES.map((s, i) => `<option value="${i}" ${+venture.stage === i ? "selected" : ""}>${s}</option>`).join("")}</select></td></tr>
           <tr><td>Looking for</td><td>${esc(needs.join(", "))}</td></tr>
           <tr><td>Pitch Night</td><td>${u.pitchnight ? "Opted in" : "Not opted in"} · <button class="link" data-act="toggle-pitch">${u.pitchnight ? "Opt out" : "Opt in"}</button></td></tr>
           <tr><td>Listed</td><td>${fmtDate(venture.createdAt)} · updated ${fmtDate(venture.updatedAt)}</td></tr>
-        </tbody></table>
+        </tbody></table></div>
         <div class="row mt-3"><button class="btn btn-sm" data-act="edit-profile" data-mode="manual">Edit details</button>
           ${venture.status === "live" ? `<button class="btn btn-sm" data-act="venture-status" data-status="paused">Pause listing</button>` : venture.status === "paused" ? `<button class="btn btn-primary btn-sm" data-act="venture-status" data-status="live">Make live again</button>` : ""}
           <button class="btn btn-sm" data-act="venture" data-id="${esc(venture.id)}">Preview public listing</button></div>
@@ -805,7 +808,7 @@ views.dashboard = async () => {
         <span class="label">Who responded</span>
         <div class="mt-2">${breakdown(received)}</div>
         <span class="label" style="display:block;margin-top:2rem">Your team</span>
-        <div class="list mt-2">
+        <div class="list boxed mt-2">
           <div class="list-row" style="grid-template-columns:auto 1fr">${avatar(u.name, u.photo)}<div><span class="title">${esc(u.name)}</span><div class="tagline">Founder</div></div></div>
           ${team.map((a) => `<div class="list-row" style="grid-template-columns:auto 1fr">${avatar(a.applicantName)}<div><span class="title">${esc(a.applicantName)}</span><div class="tagline">${esc((a.applicantSkills || []).join(", "))}</div></div></div>`).join("")}
         </div>
@@ -816,16 +819,16 @@ views.dashboard = async () => {
   else if (tab === "applications") main = founder
     ? `${breakdown(received)}<div class="toolbar"><div class="seg">${["", ...APP_STATES].map((s) => `<button data-act="app-filter" data-f="${s}" class="${(S.appFilter || "") === s ? "on" : ""}">${s ? statusLabel(s) : "All"}</button>`).join("")}</div></div>${receivedList(S.appFilter)}`
     : `${breakdown(sent)}<div class="mt-3">${sentList(sent)}</div>`;
-  else if (tab === "teams") main = myTeams.length ? `<div class="list">${myTeams.map((a) => `<button class="list-row" style="grid-template-columns:1fr auto" data-act="venture" data-id="${esc(a.ventureId)}"><div><span class="title">${esc(a.ventureName)}</span><div class="tagline">Accepted ${fmtDate(a.updatedAt || a.createdAt)}</div></div><span class="go">→</span></button>`).join("")}</div>`
+  else if (tab === "teams") main = myTeams.length ? `<div class="list boxed">${myTeams.map((a) => `<button class="list-row" style="grid-template-columns:1fr auto" data-act="venture" data-id="${esc(a.ventureId)}"><div><span class="title">${esc(a.ventureName)}</span><div class="tagline">Accepted ${fmtDate(a.updatedAt || a.createdAt)}</div></div><span class="go">→</span></button>`).join("")}</div>`
     : `<div class="empty">When a founder accepts your application, the team shows up here.</div>`;
   else if (tab === "matches") main = matchList;
-  else if (tab === "events") main = myEvents.length ? `<div class="list">${myEvents.map((e) => eventRow(e, rsvps)).join("")}</div>` : `<div class="empty">You haven't RSVP'd to anything yet. <a class="link" href="#events">See events</a></div>`;
-  else if (tab === "ideas") main = checks.length ? `<div class="list">${checks.sort(byDateDesc("createdAt")).map((c) => `<div class="list-row" style="grid-template-columns:4rem 1fr auto"><span class="score" style="font-size:2rem">${ideaScore(c.answers)}</span><div><span class="title">${esc(c.idea)}</span><div class="tagline">${fmtDate(c.createdAt)}</div></div><a class="arrow-link small" href="#validate">Re-check</a></div>`).join("")}</div>`
+  else if (tab === "events") main = myEvents.length ? `<div class="list boxed">${myEvents.map((e) => eventRow(e, rsvps)).join("")}</div>` : `<div class="empty">You haven't RSVP'd to anything yet. <a class="link" href="#events">See events</a></div>`;
+  else if (tab === "ideas") main = checks.length ? `<div class="list boxed">${checks.sort(byDateDesc("createdAt")).map((c) => `<div class="list-row" style="grid-template-columns:4rem 1fr auto"><span class="score" style="font-size:2rem">${ideaScore(c.answers)}</span><div><span class="title">${esc(c.idea)}</span><div class="tagline">${fmtDate(c.createdAt)}</div></div><a class="arrow-link small" href="#validate">Re-check</a></div>`).join("")}</div>`
     : `<div class="empty">No idea checks yet. <a class="link" href="#validate">Check an idea</a></div>`;
   else main = `
     <div class="grid g2" style="gap:3rem;align-items:start">
       <div>
-        <table class="table"><tbody>
+        <div class="table-wrap"><table class="table"><tbody>
           <tr><td>Name</td><td>${esc(u.name)}</td></tr>
           <tr><td>Email</td><td>${esc(S.user.email)}</td></tr>
           <tr><td>Role</td><td><select class="input" style="width:auto;height:32px" data-act-change="change-role" aria-label="Role">${[["founder", "Founder"], ["builder", "Builder"], ["explorer", "Explorer"]].map(([k, t]) => `<option value="${k}" ${u.role === k ? "selected" : ""}>${t}</option>`).join("")}</select></td></tr>
@@ -836,7 +839,7 @@ views.dashboard = async () => {
           <tr><td>LinkedIn</td><td>${esc(u.linkedin || "")}</td></tr>
           ${!founder ? `<tr><td>Past work</td><td>${esc(u.work || "")}</td></tr><tr><td>Looking for</td><td>${esc(u.looking || "")}</td></tr>` : ""}
           <tr><td>Member since</td><td>${fmtDate(u.createdAt)}</td></tr>
-        </tbody></table>
+        </tbody></table></div>
         <div class="row mt-3"><button class="btn" data-act="edit-profile" data-mode="manual">Edit profile</button><button class="btn" data-act="edit-profile" data-mode="ai">Update with my AI</button></div>
       </div>
       ${publicPreview}
@@ -845,11 +848,12 @@ views.dashboard = async () => {
   return `
   <div class="container shell fade">
     <aside class="side" aria-label="Dashboard sections">
-      ${tabs.map(([k, l, n]) => `<button data-act="dash-tab" data-tab="${k}" class="${tab === k ? "on" : ""}">${l}${n ? `<span class="count">${n}</span>` : ""}</button>`).join("")}
-      <hr/><a href="#validate">Validate an idea</a>${S.admin ? `<a href="#admin">Admin console</a>` : ""}<button data-act="signout">Sign out</button>
+      <div class="me">${avatar(u.name, u.photo)}<div><b>${esc(u.name)}</b><small>${roleName(u)}</small></div></div>
+      ${tabs.map(([k, l, n]) => `<button data-act="dash-tab" data-tab="${k}" class="${tab === k ? "on" : ""}"><span class="ico">${ICON[k] || ""}</span>${l}${n ? `<span class="count">${n}</span>` : ""}</button>`).join("")}
+      <hr/><a href="#validate"><span class="ico">${ICON.validate}</span>Validate an idea</a>${S.admin ? `<a href="#admin"><span class="ico">${ICON.admin}</span>Admin console</a>` : ""}<button data-act="signout"><span class="ico">${ICON.signout}</span>Sign out</button>
     </aside>
     <div>
-      <div class="spread dash-hero"><div><span class="label">${roleName(u)} · Dashboard</span><h2 class="mt-1">Hello, ${esc(String(u.name).split(" ")[0])}.</h2></div>
+      <div class="dash-hero"><div class="who">${avatar(u.name, u.photo)}<div><span class="label">${roleName(u)} · Dashboard</span><h2 class="mt-1">Hello, ${esc(String(u.name).split(" ")[0])}.</h2><p class="sum">${summary}</p></div></div>
         <a href="#matchmaking" class="btn btn-primary">${founder ? "Browse builders" : "Find ventures"}</a></div>
       ${main}
     </div>
@@ -969,15 +973,17 @@ function parseHash() {
   if (!matchMedia("(hover: hover) and (pointer: fine)").matches || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   let current = null;
   const reset = (el) => { el.classList.remove("tilting"); el.style.setProperty("--rx", "0deg"); el.style.setProperty("--ry", "0deg"); };
+  const SEL = ".tilt, .tile, .compare > div, .how > div, .post, .person, .choice-opt, .stat, .col, .tl, .feature, .role, .cta-gold, .mock";
   document.addEventListener("pointermove", (e) => {
-    const el = e.target.closest?.(".tilt");
+    const el = e.target.closest?.(SEL);
     if (current && current !== el) { reset(current); current = null; }
     if (!el) return;
     current = el;
     const r = el.getBoundingClientRect();
     const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
-    const max = el.classList.contains("mock") ? 7 : el.classList.contains("t-lg") ? 3.5 : 6; // big tiles tilt less
-    el.classList.add("tilting");
+    // bigger cards tilt less, so large panels stay calm and small cards feel lively
+    const max = el.classList.contains("mock") ? 7 : Math.max(1.2, Math.min(6, 1700 / r.width));
+    el.classList.add("tilt", "tilting");
     el.style.setProperty("--ry", ((x - 0.5) * 2 * max).toFixed(2) + "deg");
     el.style.setProperty("--rx", ((0.5 - y) * 2 * max).toFixed(2) + "deg");
     el.style.setProperty("--gx", (x * 100).toFixed(1) + "%");

@@ -222,7 +222,7 @@ a:hover > .avatar { border-color: var(--accent); }
 
 /* ---------- cards ---------- */
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 1.75rem; box-shadow: var(--shadow); position: relative; transition: border-color .2s, transform .2s; }
-a.card:hover, button.card:hover, .card.hover:hover { border-color: color-mix(in srgb, var(--accent) 70%, transparent); transform: translateY(-2px); }
+a.card:hover, button.card:hover, .card.hover:hover { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 1.75rem; box-shadow: var(--shadow); }
 .panel.flat { background: transparent; box-shadow: none; }
 .grid { display: grid; gap: 1.25rem; }
@@ -320,7 +320,7 @@ button.list-row { width: 100%; text-align: left; }
 
 /* journal cards */
 .post { display: flex; flex-direction: column; border-radius: var(--r-lg); overflow: hidden; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); transition: border-color .2s, transform .2s; }
-.post:hover { border-color: color-mix(in srgb, var(--accent) 70%, transparent); transform: translateY(-2px); }
+.post:hover { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
 .cover { aspect-ratio: 16 / 9; position: relative; overflow: hidden; display: flex; align-items: flex-end; padding: 1rem 1.25rem; }
 .cover::before { content: ""; position: absolute; inset: 0; background: repeating-radial-gradient(circle at 110% 120%, transparent 0 22px, rgba(255,255,255,.14) 22px 23px); }
 .cover span { position: relative; font: 500 .7rem var(--mono); letter-spacing: .1em; text-transform: uppercase; color: rgba(255,255,255,.9); background: rgba(0,0,0,.25); padding: .3rem .6rem; border-radius: 999px; backdrop-filter: blur(4px); }
@@ -412,7 +412,7 @@ select.input { appearance: none; padding-right: 36px; background-image: url("dat
 .steps div.cur { border-color: var(--gold); color: var(--gold-em); }
 .choice { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .choice-opt { text-align: left; border: 1px solid var(--line-2); border-radius: var(--r-xl); padding: 1.8rem; display: flex; flex-direction: column; gap: .6rem; background: var(--surface); box-shadow: var(--shadow); transition: border-color .15s, transform .15s; }
-.choice-opt:hover { border-color: var(--accent); transform: translateY(-2px); }
+.choice-opt:hover { border-color: var(--accent); }
 .choice-opt.rec { border-color: color-mix(in srgb, var(--gold) 55%, transparent); background: radial-gradient(400px 200px at 100% 0%, rgba(242,182,48,.14), transparent 70%), var(--surface); }
 .choice-opt h3 { font: 400 1.9rem/1.1 var(--serif); }
 .choice-opt p { font-size: .92rem; }
@@ -640,3 +640,87 @@ html, body { overflow-x: clip; }
 .mock.tilt.tilting .mock-window::after { opacity: 1; }
 @media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) { .tilt { transform: none !important; } }
 .pages-art div { background: #221E18; }
+
+/* ==========================================================
+   LIQUID GLASS SYSTEM
+   Every surface is frosted, translucent glass with a light top edge,
+   floating over one shared background of slowly drifting gold light.
+   ========================================================== */
+:root {
+  --glass: linear-gradient(180deg, rgba(255,246,228,.075), rgba(255,246,228,.022) 55%), rgba(20,17,13,.50);
+  --glass-strong: linear-gradient(180deg, rgba(255,246,228,.09), rgba(255,246,228,.03) 55%), rgba(24,21,16,.86);
+  --glass-border: rgba(255,240,210,.13);
+  --glass-edge: inset 0 1px 0 rgba(255,250,235,.10), inset 0 -1px 0 rgba(0,0,0,.25);
+  --glass-shadow: 0 30px 60px -32px rgba(0,0,0,.75);
+  --glass-blur: blur(18px) saturate(150%);
+}
+.card, .panel, .tile, .compare > div, .how > div, .list.boxed, .post, .person, .feature, .col, .choice-opt,
+.side, .dash-hero, .stat, .table-wrap, .tl, .role, .demo-note, .mock-window, .mock-float, .seg, .notice, .empty-card {
+  background: var(--glass);
+  border-color: var(--glass-border);
+  box-shadow: var(--glass-edge), var(--glass-shadow);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+.modal-card { background: var(--glass-strong); border-color: var(--glass-border); box-shadow: var(--glass-edge), 0 40px 100px -30px rgba(0,0,0,.85); -webkit-backdrop-filter: blur(24px) saturate(150%); backdrop-filter: blur(24px) saturate(150%); }
+.modal-backdrop { background: rgba(8,6,2,.55); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.nav { box-shadow: inset 0 -1px 0 rgba(255,240,210,.06); }
+.input, select.input, textarea.input { background: rgba(10,9,7,.45); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.btn:not(.btn-primary):not(.btn-google) { background: rgba(255,246,228,.04); box-shadow: inset 0 1px 0 rgba(255,250,235,.07); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.list.boxed .list-row, .table td { border-color: rgba(255,240,210,.07); }
+.v-head, .table th { background: rgba(255,246,228,.035); }
+.post .cover { box-shadow: inset 0 -1px 0 rgba(255,240,210,.08); }
+/* specials keep their tint on top of glass */
+.dash-hero { background: radial-gradient(640px 280px at 100% 0%, rgba(242,182,48,.18), transparent 70%), var(--glass); }
+.notice { background: linear-gradient(180deg, rgba(242,182,48,.12), rgba(242,182,48,.05)), var(--glass); border-color: rgba(242,182,48,.38); }
+.compare > div.dark { background: radial-gradient(500px 260px at 100% 0%, rgba(242,182,48,.24), transparent 70%), var(--glass-strong); border-color: rgba(242,182,48,.22); }
+.choice-opt.rec { background: radial-gradient(400px 200px at 100% 0%, rgba(242,182,48,.16), transparent 70%), var(--glass); }
+.feature > div + div { background: rgba(255,246,228,.025); }
+.side .on { background: rgba(255,246,228,.08); }
+.cta-gold { -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); box-shadow: var(--glass-edge), var(--glass-shadow); }
+
+/* drifting light behind the glass: this is what makes it read as "liquid" */
+.blobs { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.blobs i { position: absolute; border-radius: 50%; filter: blur(70px); opacity: .55; }
+.blobs i:nth-child(1) { width: 46vw; height: 46vw; right: -8vw; top: -10vw; background: rgba(242,182,48,.22); animation: drift1 38s ease-in-out infinite alternate; }
+.blobs i:nth-child(2) { width: 34vw; height: 34vw; left: -10vw; top: 40vh; background: rgba(214,140,40,.14); animation: drift2 46s ease-in-out infinite alternate; }
+.blobs i:nth-child(3) { width: 28vw; height: 28vw; right: 18vw; bottom: -12vw; background: rgba(255,214,120,.12); animation: drift3 52s ease-in-out infinite alternate; }
+@keyframes drift1 { to { transform: translate(-12vw, 14vh) scale(1.15); } }
+@keyframes drift2 { to { transform: translate(16vw, -10vh) scale(.9); } }
+@keyframes drift3 { to { transform: translate(-14vw, -18vh) scale(1.2); } }
+
+/* tilt glare for every tilting card (the hero preview has its own) */
+.tilt:not(.mock):not(.cta-gold) { position: relative; }
+.tilt:not(.mock):not(.cta-gold)::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 2;
+  background: radial-gradient(420px circle at var(--gx, 50%) var(--gy, 50%), rgba(255, 226, 160, .10), transparent 45%); opacity: 0; transition: opacity .35s; }
+.tilt.tilting:not(.mock):not(.cta-gold)::after { opacity: 1; }
+
+/* ---------- dashboard & admin polish ---------- */
+.side { padding: .6rem; gap: 3px; }
+.side .me { display: flex; align-items: center; gap: .75rem; padding: .7rem .7rem .9rem; margin-bottom: .35rem; border-bottom: 1px solid rgba(255,240,210,.08); }
+.side .me b { display: block; font-size: .92rem; font-weight: 600; color: var(--text); line-height: 1.25; }
+.side .me small { font: .68rem var(--mono); color: var(--gold-em); text-transform: uppercase; letter-spacing: .08em; }
+.side a, .side button { justify-content: flex-start; gap: .7rem; }
+.side .ico { width: 18px; height: 18px; display: grid; place-items: center; color: var(--text-3); flex-shrink: 0; transition: color .15s; }
+.side .ico svg { width: 17px; height: 17px; }
+.side .on .ico, .side a:hover .ico, .side button:hover .ico { color: var(--gold); }
+.side .count { margin-left: auto; }
+.dash-hero { display: flex; justify-content: space-between; align-items: center; gap: 1.5rem; flex-wrap: wrap; padding: 2rem 2.2rem; }
+.dash-hero .who { display: flex; align-items: center; gap: 1.2rem; }
+.dash-hero .who .avatar { width: 58px; height: 58px; font-size: 1rem; box-shadow: 0 0 0 4px rgba(242,182,48,.12); }
+.dash-hero h2 { font-size: clamp(2.2rem, 3.6vw, 3rem); }
+.dash-hero .sum { margin-top: .4rem; font-size: .95rem; color: var(--text-2); }
+.dash-hero .sum b { color: var(--text); font-weight: 600; }
+.dash-hero .ico-badge { width: 58px; height: 58px; border-radius: 16px; display: grid; place-items: center; color: var(--gold); background: rgba(242,182,48,.10); border: 1px solid rgba(242,182,48,.25); }
+.dash-hero .ico-badge svg { width: 26px; height: 26px; }
+.stat { position: relative; overflow: hidden; }
+.stat::before { content: ""; position: absolute; right: -40px; top: -40px; width: 120px; height: 120px; border-radius: 50%; background: radial-gradient(circle, rgba(242,182,48,.14), transparent 70%); pointer-events: none; }
+.sec-label { display: flex; justify-content: space-between; align-items: center; margin-bottom: .8rem; }
+.empty-card { padding: 2.5rem 1.5rem; border-radius: var(--r-lg); border: 1px solid var(--glass-border); text-align: center; color: var(--text-3); }
+
+@media (max-width: 680px) {
+  .card, .panel, .tile, .compare > div, .how > div, .list.boxed, .post, .person, .feature, .col, .choice-opt, .side, .dash-hero, .stat, .table-wrap, .tl, .mock-window, .mock-float {
+    -webkit-backdrop-filter: blur(10px) saturate(140%); backdrop-filter: blur(10px) saturate(140%); }
+  .dash-hero { padding: 1.5rem; }
+}
+@media (prefers-reduced-motion: reduce) { .blobs i { animation: none; } }

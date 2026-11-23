@@ -4,10 +4,10 @@
    journal posts, resources, messages, admins and site settings.
    Raw data is also always available in the Firebase console.
    ========================================================== */
-import { db } from "./db.js";
-import * as C from "./content.js";
-import { S, $, $$, esc, fmtDate, toast, openModal, closeModal, downloadCSV, slug, byDateDesc } from "./ui.js";
-import { render, applySettings, statusLabel } from "./app.js";
+import { db } from "./db.js?v=202611230611";
+import * as C from "./content.js?v=202611230611";
+import { S, $, $$, esc, fmtDate, toast, openModal, closeModal, downloadCSV, slug, byDateDesc, ICON, avatar } from "./ui.js?v=202611230611";
+import { render, applySettings, statusLabel } from "./app.js?v=202611230611";
 
 const yes = (v) => (v ? "Yes" : "No");
 const SCHEMAS = {
@@ -32,6 +32,19 @@ const SCHEMAS = {
     cols: [["title", "Title"], ["shelf", "Shelf"], ["url", "Link", (v) => (v ? "Yes" : "Coming soon")], ["order", "Order"]],
   },
 };
+const TAB_HELP = {
+  overview: "Community at a glance: members, ventures, applications and the inbox.",
+  ventures: "Every venture listing. Hide anything that breaks community guidelines.",
+  applications: "Every application across all ventures. Founders manage statuses.",
+  members: "Everyone who has joined. Search, view profiles, make admins.",
+  events: "Create and publish events, and see who's coming.",
+  opportunities: "Internships, roles and projects shown on the Opportunities page.",
+  posts: "Journal articles and newsletters, written in simple Markdown.",
+  resources: "The founder's library: guides, templates, books and tools.",
+  messages: "Contact form, newsletter sign-ups and opportunity submissions.",
+  admins: "People who can use this console.",
+  settings: "Links, the announcement bar and VistaDex details.",
+};
 const TABS = [["overview", "Overview"], ["ventures", "Ventures"], ["applications", "Applications"], ["members", "Members"], ["events", "Events"], ["opportunities", "Opportunities"], ["posts", "Journal"], ["resources", "Resources"], ["messages", "Inbox"], ["admins", "Admins"], ["settings", "Settings"]];
 const A = (S.cache.adm ||= {});
 const load = async (c, force) => (A[c] && !force ? A[c] : (A[c] = await db.adminList(c)));
@@ -53,11 +66,12 @@ export async function adminView() {
   return `
   <div class="container shell fade">
     <aside class="side" aria-label="Admin sections">
-      ${TABS.map(([k, l]) => `<button data-act="adm-tab" data-tab="${k}" class="${tab === k ? "on" : ""}">${l}</button>`).join("")}
-      <hr/><a href="#dashboard">My dashboard</a><button data-act="adm-refresh">Refresh data</button>
+      <div class="me">${avatar(S.profile?.name || S.user.name, S.profile?.photo || S.user.photo)}<div><b>${esc(S.profile?.name || S.user.name)}</b><small>Admin</small></div></div>
+      ${TABS.map(([k, l]) => `<button data-act="adm-tab" data-tab="${k}" class="${tab === k ? "on" : ""}"><span class="ico">${ICON[k] || ""}</span>${l}</button>`).join("")}
+      <hr/><a href="#dashboard"><span class="ico">${ICON.dashboard}</span>My dashboard</a><button data-act="adm-refresh"><span class="ico">${ICON.refresh}</span>Refresh data</button>
     </aside>
     <div>
-      <div class="spread dash-hero"><div><span class="label">Admin console · ${db.mode === "demo" ? "Demo data" : "Live data"}</span><h2 class="mt-1">${TABS.find((t) => t[0] === tab)[1]}</h2></div>
+      <div class="dash-hero"><div class="who"><span class="ico-badge">${ICON[tab] || ICON.admin}</span><div><span class="label">Admin console · ${db.mode === "demo" ? "Demo data" : "Live data"}</span><h2 class="mt-1">${TABS.find((t) => t[0] === tab)[1]}</h2><p class="sum">${TAB_HELP[tab] || ""}</p></div></div>
         ${SCHEMAS[tab] ? `<button class="btn btn-primary" data-act="adm-new" data-col="${tab}">New ${SCHEMAS[tab].singular}</button>` : ""}</div>
       ${body}
     </div>
@@ -200,7 +214,7 @@ export const adminActions = {
     const isAdm = await db.isAdmin(u.email);
     const rows = [["Email", u.email], ["Role", u.role], ["Year", u.year], ["Bio", u.bio], ["Skills", (u.skills || []).join(", ")], ["Needs", (u.needs || []).join(", ")], ["Domains", (u.domains || []).join(", ")], ["Availability", u.avail], ["LinkedIn", u.linkedin], ["Venture", u.vname], ["Joined", fmtDate(u.createdAt)]].filter(([, v]) => v);
     openModal(`<span class="label">Member</span><h2 id="modalTitle" class="mt-1">${esc(u.name)}</h2>
-      <table class="table mt-3"><tbody>${rows.map(([k, v]) => `<tr><td>${k}</td><td>${esc(v)}</td></tr>`).join("")}</tbody></table>
+      <div class="table-wrap mt-3"><table class="table"><tbody>${rows.map(([k, v]) => `<tr><td>${k}</td><td>${esc(v)}</td></tr>`).join("")}</tbody></table></div>
       <div class="row mt-3">${isAdm ? `<span class="tag accent">Admin</span>` : u.email ? `<button class="btn btn-sm" data-act="adm-make-admin" data-email="${esc(u.email)}">Make admin</button>` : ""}
         <button class="btn btn-sm" data-act="copy-text" data-text="${esc(u.email || "")}">Copy email</button></div>`);
   },
