@@ -1,0 +1,151 @@
+rules_version = '2';
+
+// ==========================================================
+// FBC Firestore security rules
+// These run on Google's servers. The website code can be read and
+// changed by anyone; these rules are what actually protect the data.
+// Test locally:  npm run test:rules   (see SETUP.md)
+// ==========================================================
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+    function signedIn() { return request.auth != null; }
+    function email() { return request.auth.token.email.lower(); }
+    // Signed in with a verified BITS Google account (any campus).
+    function isBits() {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && email().matches('.*@([a-z0-9-]+[.])?bits-pilani[.]ac[.]in$');
+    }
+    function isAdmin() { return isBits() && exists(/databases/$(database)/documents/admins/$(email())); }
+    function isSelf(uid) { return isBits() && request.auth.uid == uid; }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function str(v, max) { return v is string && v.size() <= max; }
+    function optStr(d, k, max) { return !(k in d) || str(d[k], max); }
+    function optList(d, k, max) { return !(k in d) || (d[k] is list && d[k].size() <= max); }
+
+    // ---------- admins ----------
+    match /admins/{adminEmail} {
+      allow read: if isBits() && (adminEmail == email() || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // ---------- site settings (links, announcement) ----------
+    match /settings/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ---------- member profiles ----------
+    function validProfile(d) {
+      return d.email == request.auth.token.email
+        && d.role in ['founder', 'builder', 'explorer']
+        && str(d.name, 80)
+        && optStr(d, 'year', 60) && optStr(d, 'bio', 200) && optStr(d, 'linkedin', 200)
+        && optStr(d, 'work', 800) && optStr(d, 'vname', 80) && optStr(d, 'vpitch', 250) && optStr(d, 'vproblem', 800)
+        && optList(d, 'skills', 10) && optList(d, 'needs', 10) && optList(d, 'domains', 10)
+        && !('admin' in d);
+    }
+    match /users/{uid} {
+      allow read: if isBits();                    // members can see each other's profiles
+      allow create, update: if isSelf(uid) && validProfile(request.resource.data);
+      allow delete: if isSelf(uid) || isAdmin();
+
+      // my RSVPs
+      match /rsvps/{eventId} {
+        allow read: if isSelf(uid) || isAdmin();
+        allow create: if isSelf(uid) && exists(/databases/$(database)/documents/events/$(eventId));
+        allow delete: if isSelf(uid) || isAdmin();
+      }
+    }
+
+    // ---------- ventures: one per founder, id = founder's uid ----------
+    function validVenture(d) {
+      return d.founderUid == request.auth.uid
+        && str(d.name, 80) && optStr(d, 'pitch', 250) && optStr(d, 'problem', 800)
+        && d.stage is int && d.stage >= 0 && d.stage <= 4
+        && optList(d, 'needs', 10) && optList(d, 'domains', 10);
+    }
+    match /ventures/{founderUid} {
+      allow read: if resource.data.status == 'live'
+                  || (signedIn() && resource.data.founderUid == request.auth.uid)
+                  || isAdmin();
+      allow create: if isSelf(founderUid) && validVenture(request.resource.data)
+                    && request.resource.data.status in ['live', 'paused'];
+      // Founders can edit and pause/unpause, but can't un-hide a venture an admin hid.
+      allow update: if (isSelf(founderUid) && validVenture(request.resource.data)
+                        && (resource.data.status == 'hidden'
+                              ? request.resource.data.status == 'hidden'
+                              : request.resource.data.status in ['live', 'paused']))
+                    || isAdmin();
+      allow delete: if isSelf(founderUid) || isAdmin();
+    }
+
+    // ---------- applications: id = ventureId_applicantUid ----------
+    match /applications/{appId} {
+      allow read: if isBits() && (resource.data.applicantUid == request.auth.uid
+                                  || resource.data.founderUid == request.auth.uid)
+                  || isAdmin();
+      allow create: if isBits()
+        && appId == request.resource.data.ventureId + '_' + request.auth.uid
+        && request.resource.data.applicantUid == request.auth.uid
+        && request.resource.data.applicantEmail == request.auth.token.email
+        && request.resource.data.status == 'new'
+        && str(request.resource.data.message, 2000)
+        && get(/databases/$(database)/documents/ventures/$(request.resource.data.ventureId)).data.status == 'live'
+        && get(/databases/$(database)/documents/ventures/$(request.resource.data.ventureId)).data.founderUid == request.resource.data.founderUid
+        && request.resource.data.founderUid != request.auth.uid;
+      // Only the founder changes the status, and nothing else.
+      allow update: if isBits() && resource.data.founderUid == request.auth.uid
+        && changed().hasOnly(['status', 'updatedAt'])
+        && request.resource.data.status in ['new', 'reviewing', 'accepted', 'declined'];
+      allow delete: if isBits() && resource.data.applicantUid == request.auth.uid || isAdmin();
+    }
+
+    // ---------- events ----------
+    match /events/{eventId} {
+      allow read: if resource.data.published == true || isAdmin();
+      allow write: if isAdmin();
+
+      match /rsvps/{uid} {
+        allow read: if isSelf(uid) || isAdmin();
+        allow create: if isSelf(uid) && request.resource.data.uid == uid
+                      && get(/databases/$(database)/documents/events/$(eventId)).data.published == true;
+        allow delete: if isSelf(uid) || isAdmin();
+      }
+    }
+
+    // ---------- admin-managed content ----------
+    match /opportunities/{id} {
+      allow read: if resource.data.status == 'live' || isAdmin();
+      allow write: if isAdmin();
+    }
+    match /posts/{id} {
+      allow read: if resource.data.published == true || isAdmin();
+      allow write: if isAdmin();
+    }
+    match /resources/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ---------- inbox: anyone can write, only admins read ----------
+    match /messages/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['type', 'name', 'email', 'body', 'extra', 'createdAt'])
+        && request.resource.data.type in ['contact', 'newsletter', 'interest', 'opportunity']
+        && str(request.resource.data.email, 200)
+        && optStr(request.resource.data, 'name', 120)
+        && optStr(request.resource.data, 'body', 4000)
+        && optStr(request.resource.data, 'extra', 200);
+      allow read, update, delete: if isAdmin();
+    }
+
+    // ---------- idea checks: private to the member ----------
+    match /ideaChecks/{id} {
+      allow read: if isBits() && resource.data.uid == request.auth.uid || isAdmin();
+      allow create: if isBits() && request.resource.data.uid == request.auth.uid && str(request.resource.data.idea, 300);
+      allow delete: if isBits() && resource.data.uid == request.auth.uid || isAdmin();
+    }
+  }
+}

@@ -1,1157 +1,1026 @@
 /* ==========================================================
-   FBC prototype: tiny hash-router SPA, no build step.
-   Auth/profile is mocked with localStorage.
+   FBC website: router, pages, sign-in, onboarding, dashboard.
+   Admin console lives in admin.js. Data access in db.js.
    ========================================================== */
-(() => {
-  const D = window.FBC;
-  const $ = (s, el = document) => el.querySelector(s);
-  const $$ = (s, el = document) => [...el.querySelectorAll(s)];
-  const app = $("#app");
+import { db, isAllowedEmail } from "./db.js";
+import * as C from "./content.js";
+import { aiPrompt, aiSample, parseAiReply, FIELD_LABEL, isFounder, roleName } from "./ai.js";
+import { S, $, $$, esc, fmtDate, parseDay, byDateDesc, upcoming, past, stageBar, avatar, dots, toast, openModal, closeModal, md, GOOGLE_ICON } from "./ui.js";
+import { adminView, adminActions, adminForms, adminChange } from "./admin.js";
 
-  /* ---------- state ---------- */
-  const store = {
-    get: (k, d = null) => { try { return JSON.parse(localStorage.getItem("fbc_" + k)) ?? d; } catch { return d; } },
-    set: (k, v) => { try { localStorage.setItem("fbc_" + k, JSON.stringify(v)); } catch {} },
-    del: (k) => { try { localStorage.removeItem("fbc_" + k); } catch {} },
-  };
-  const user = () => store.get("user");
+const app = $("#app");
+const views = {};
+const actions = {};   // data-act="name" click handlers
+const forms = {};     // data-form="name" submit handlers
 
-  /* ---------- helpers ---------- */
-  const esc = (s = "") => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const initials = (n = "") => n.split(/\s+/).filter(Boolean).map((p) => p[0]).slice(0, 2).join("").toUpperCase() || "?";
-  const fmt = (d, o = { day: "numeric", month: "short", year: "numeric" }) => new Date(d + "T00:00:00").toLocaleDateString("en-IN", o);
-  const stageDots = (s) => `<span class="stage-dots" title="${D.stages[s]}">${D.stages.map((_, i) => `<i class="${i <= s ? "on" : ""}"></i>`).join("")}</span>`;
-  const toast = (msg) => { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove("show"), 2600); };
-  const openModal = (html) => { $("#modalBody").innerHTML = html; $("#modal").classList.add("open"); $("#modal").setAttribute("aria-hidden", "false"); };
-  const closeModal = () => { $("#modal").classList.remove("open"); $("#modal").setAttribute("aria-hidden", "true"); };
+/* ---------- shared fragments ---------- */
+const pageHead = (label, title, lead, extra = "") => `
+  <section class="page-head"><div class="container">
+    <span class="label">${label}</span><h1>${title}</h1>${lead ? `<p class="lead">${lead}</p>` : ""}${extra}
+  </div></section>`;
 
-  const I = { // inline icons (stroke-based, inherit colour)
-    bulb: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>',
-    users: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/></svg>',
-    rocket: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 15c-1.5 1.5-2 5-2 5s3.5-.5 5-2M14 4c4-1 6 1 6 1s2 2 1 6l-7 7-7-7 7-7z"/><circle cx="15" cy="9" r="1.5"/></svg>',
-    mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
-    book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5zM4 19a2 2 0 0 1 2-2h13"/></svg>',
-    grid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
-    brief: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/></svg>',
-    cal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
-    user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
-    check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>',
-    tool: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0 5 5L21 13l-8 8-3-3 8-8 1.3-1.3-4-4zM3 21l6-6"/></svg>',
-    pen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
-    target: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>',
-    out: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>',
-  };
+const ventureHead = () => `<div class="list-row v-row v-head"><span class="label">Venture</span><span class="label">Domain</span><span class="label">Stage</span><span class="label needs">Looking for</span><span></span></div>`;
+const ventureRow = (v) => `
+  <button class="list-row v-row" data-act="venture" data-id="${esc(v.id)}">
+    <span><span class="title">${esc(v.name)}</span><br/><span class="tagline">${esc(v.pitch)}</span></span>
+    <span class="small muted">${esc((v.domains || []).join(", "))}</span>
+    <span class="small muted">${stageBar(v.stage)}${esc(C.STAGES[v.stage] || "")}</span>
+    <span class="small muted needs">${esc((v.needs || []).join(", "))}</span>
+    <span class="go" aria-hidden="true">→</span>
+  </button>`;
 
-  const pageHead = (eyebrow, title, lead, extra = "") => `
-    <section class="page-head"><div class="container">
-      <span class="eyebrow">${eyebrow}</span><h1>${title}</h1><p class="lead">${lead}</p>${extra}
-    </div></section>`;
+const isPastDate = (d) => (d || "") < new Date().toISOString().slice(0, 10);
+const eventRow = (e, rsvps = []) => {
+  const d = parseDay(e.date);
+  const going = rsvps.includes(e.id);
+  return `
+  <div class="list-row e-row clickable" data-act="event" data-id="${esc(e.id)}">
+    <div class="e-date"><b>${d ? d.getDate() : ""}</b>${d ? d.toLocaleString("en", { month: "short" }) + " " + d.getFullYear() : ""}</div>
+    <div><span class="title">${esc(e.title)}</span><div class="tagline">${dots([e.type, e.time, e.venue])}</div></div>
+    <div>${isPastDate(e.date) ? `<span class="label">Past</span>` : `<button class="btn btn-sm" data-act="rsvp" data-id="${esc(e.id)}">${going ? "Going ✓" : "RSVP"}</button>`}</div>
+  </div>`;
+};
 
-  const ventureCard = (v) => `
-    <article class="card hover venture" data-venture="${v.id}" tabindex="0">
-      <div class="venture-top">
-        <div class="v-logo">${v.logo}</div>
-        <div><h3 style="margin:0">${esc(v.name)}</h3><span class="small muted">${esc(v.founder)} · ${esc(v.year)}</span></div>
-      </div>
-      <div class="tags"><span class="tag gold">${v.domain}</span><span class="tag">${D.stages[v.stage]}</span></div>
-      <p>${esc(v.pitch)}</p>
-      <div><div class="needs">Looking for</div><div class="tags mt-1">${v.needs.map((n) => `<span class="tag">${n}</span>`).join("")}</div></div>
-      <div class="venture-foot">${stageDots(v.stage)}<span>${v.applicants} applicants</span></div>
-    </article>`;
+const postCard = (p) => `
+  <a class="post" href="#journal-${esc(p.id)}">
+    <span class="label">${esc(p.cat)} · ${fmtDate(p.date)}</span>
+    <h3>${esc(p.title)}</h3>
+    <p>${esc(p.excerpt)}</p>
+    <span class="xs faint">${esc(p.author)}${p.read ? ` · ${esc(p.read)} read` : ""}</span>
+  </a>`;
 
-  const eventCard = (e) => {
-    const d = new Date(e.date + "T00:00:00");
-    return `
-    <article class="card hover event" data-event="${e.id}">
-      <div class="date-block"><b>${d.getDate()}</b><span>${d.toLocaleString("en", { month: "short" })} ${String(d.getFullYear()).slice(2)}</span></div>
-      <div><span class="tag ${e.upcoming ? "gold" : ""}">${e.type}</span><h3 class="mt-1">${esc(e.title)}</h3>
-        <div class="meta"><span>${e.time || "All day"}</span><span>${esc(e.venue)}</span></div></div>
-      ${e.upcoming ? `<button class="btn btn-ghost btn-sm" data-rsvp="${e.id}">${(store.get("rsvps", [])).includes(e.id) ? "✓ Going" : "RSVP"}</button>` : `<span class="small muted">Past event</span>`}
-    </article>`;
-  };
+const cta = () => `
+  <section class="cta"><div class="container">
+    <span class="label">Join</span>
+    <h2 class="mt-2">Have an idea? <em>Find your people.</em></h2>
+    <p class="lead mt-3">Free for every BITSian, from any branch or year. Sign in with your BITS Google account.</p>
+    <div class="row mt-4"><a href="#join" class="btn btn-primary btn-lg">Join FBC</a><a href="${esc(S.settings.whatsapp)}" target="_blank" rel="noopener" class="btn btn-lg">WhatsApp community</a></div>
+  </div></section>`;
 
-  const postCard = (p) => `
-    <a href="#journal-${p.id}" class="card post-card">
-      <div class="post-cover"><span class="big-letter">${p.letter}</span><span class="tag gold">${p.cat}</span></div>
-      <div class="post-body"><h3>${esc(p.title)}</h3><p>${esc(p.excerpt)}</p>
-        <div class="post-meta">${esc(p.author)} · ${fmt(p.date)} · ${p.read}</div></div>
-    </a>`;
+const signInPrompt = (what) => `<div class="empty"><p>Sign in with your BITS account to ${what}.</p><div class="row mt-2" style="justify-content:center"><a href="#login" class="btn btn-primary btn-sm">Sign in</a></div></div>`;
+const statusLabel = (s) => ({ new: "New", reviewing: "Reviewing", accepted: "Accepted", declined: "Declined", live: "Live", paused: "Paused", hidden: "Hidden" }[s] || s);
 
-  const ctaBand = () => `
-    <section class="section-sm"><div class="container">
-      <div class="cta-band reveal">
-        <span class="spaced">Ideas <span style="opacity:.4">/</span> People <span style="opacity:.4">/</span> Impact</span>
-        <h2 class="mt-1">Have an idea? Find your people.</h2>
-        <p>Whether you want to build, join a team, or just get curious about startups, there's a place for you here.</p>
-        <div class="hero-cta" style="justify-content:center">
-          <a href="#signup" class="btn btn-dark">Join FBC <span class="arrow">→</span></a>
-          <a href="${D.links.whatsapp}" target="_blank" rel="noopener" class="btn btn-outline-dark">WhatsApp community</a>
-        </div>
-      </div>
-    </div></section>`;
-
-  /* ==========================================================
-     VIEWS
-     ========================================================== */
-  const views = {};
-
-  /* ---------- HOME ---------- */
-  views.home = () => {
-    const upcoming = D.events.filter((e) => e.upcoming).slice(0, 3);
-    return `
-    <section class="hero"><div class="container hero-grid">
+/* ==========================================================
+   PUBLIC PAGES
+   ========================================================== */
+views.home = async () => {
+  const [ventures, events, posts] = await Promise.all([db.list("ventures"), db.list("events"), db.list("posts")]);
+  const vs = ventures.sort(byDateDesc("updatedAt")).slice(0, 5);
+  const up = upcoming(events).slice(0, 3);
+  const ps = posts.sort(byDateDesc("date")).slice(0, 3);
+  const rsvps = S.user ? await db.myRsvps(S.user.uid).catch(() => []) : [];
+  return `
+  <section class="hero"><div class="container">
+    <div class="hero-grid">
       <div>
-        <span class="script-tag">From Ideas to Impact</span>
-        <span class="eyebrow" style="display:flex">BITS Pilani · Student Community</span>
-        <h1 class="mt-1">Find the people<br/>to <span class="hl">build</span> it with.</h1>
-        <p class="lead mt-2">Founders and Builders Collective is where BITSians with ideas meet BITSians who want to build. Learn entrepreneurship together, find a co-founder, pitch, and ship.</p>
-        <div class="hero-cta">
-          <a href="#signup" class="btn btn-primary">Join the Collective <span class="arrow">→</span></a>
-          <a href="#matchmaking" class="btn btn-ghost">Explore ventures</a>
-        </div>
-        <div class="hero-meta">
-          <div><strong data-count="${D.ventures.length}">0</strong><span>ventures looking for co-founders</span></div>
-          <div><strong data-count="1200">0</strong><span>new BITSians every year</span></div>
-          <div><strong>∞</strong><span>ideas worth testing</span></div>
-        </div>
+        <span class="label">BITS Pilani · Student community · Since 2026</span>
+        <h1>Find the people<br/>to <em>build it</em> with.</h1>
+        <p class="lead">Founders and Builders Collective connects BITSians who have ideas with BITSians who want to build them. Find a co-founder, join a startup, and learn how companies actually get made.</p>
+        <div class="row"><a href="#join" class="btn btn-primary btn-lg">Join FBC</a><a href="#matchmaking" class="btn btn-lg">Browse ventures</a></div>
       </div>
-      <div class="match-visual" aria-hidden="true">
-        <div class="mv-ring"></div><div class="mv-ring r2"></div>
-        <div class="mv-center"><div><b>FBC</b><small>Find · Match · Build</small></div></div>
-        <div class="mv-node n1"><span class="avatar">AS</span><span>Founder <em>· needs dev</em></span></div>
-        <div class="mv-node n2"><span class="avatar" style="background:#F3F0E8">AG</span><span>Full-stack <em>· 2nd yr</em></span></div>
-        <div class="mv-node n3"><span class="avatar" style="background:#F3F0E8">RV</span><span>Finance <em>· 3rd yr</em></span></div>
-        <div class="mv-node n4"><span class="avatar">94%</span><span>It's a match</span></div>
+      <figure class="hero-figure">
+        <img src="assets/campus.webp" alt="Line drawing of the BITS Pilani clock tower" width="470" height="350"/>
+        <figcaption><span class="label">Clock Tower, Pilani</span><span class="label">Ideas / People / Impact</span></figcaption>
+      </figure>
+    </div>
+    <div class="facts">
+      <div class="fact"><b>1,200</b><span>students join BITS Pilani every year, and many arrive wanting to build something.</span></div>
+      <div class="fact"><b>20–25</b><span>seats a year in established clubs, for the hundreds who apply.</span></div>
+      <div class="fact"><b>1 profile</b><span>is all it takes here to reach every builder on campus.</span></div>
+    </div>
+  </div></section>
+
+  <section class="section"><div class="container sec-grid">
+    <span class="label">01 — The problem</span>
+    <div>
+      <h2>Finding a co-founder shouldn't take a semester.</h2>
+      <p class="lead mt-3">Interest and ability were never the issue on this campus. There just wasn't a place for people with ideas to meet the people who could build them.</p>
+      <div class="compare mt-4">
+        <div><span class="label">Without FBC</span>
+          <ol><li>Message 500+ people, one by one</li><li>Pitch to the hundreds who reply</li><li>Filter for who likes the idea</li><li>Filter again for who'll actually work on it</li><li>Maybe find one co-founder, months later</li></ol></div>
+        <div><span class="label gold">With FBC</span>
+          <p class="big">Post once.<br/>Get found.</p>
+          <p class="mt-2">List your idea and the skills you need. Builders who want in apply to you, and you meet them in person at Pitch Night.</p>
+          <a class="arrow-link mt-3" href="#matchmaking">See open ventures</a></div>
       </div>
-    </div></section>
+    </div>
+  </div></section>
 
-    <div class="marquee"><div class="marquee-track">${Array(2).fill(["Learn", "Connect", "Build", "Pitch", "Grow", "Validate", "Ship"].map((w) => `<span>${w}<b>/</b></span>`).join("")).join("")}</div></div>
-
-    <section class="section"><div class="container">
-      <div class="section-head reveal"><div><span class="eyebrow">The problem</span><h2>Finding a co-founder<br/>shouldn't take months.</h2></div>
-        <p class="lead">Every year hundreds of students try for a handful of club seats. Interest and ability were never the issue. There just wasn't a place for them.</p></div>
-      <div class="ways reveal">
-        <div class="way bad"><span class="spaced muted">Way 1 · the old way</span>
-          <ol><li>Contact 500+ people, one by one</li><li>Pitch your idea to hundreds</li><li>Filter: who likes it?</li><li>Filter: who'll actually work on it?</li><li><s>Find one co-founder… months later</s></li></ol></div>
-        <div class="way good"><span class="spaced gold">Way 2 · FBC</span>
-          <div class="big mt-2">1 profile.</div><div class="big gold">Many matches.</div>
-          <p class="muted mt-2">Post your idea once. Builders with the skills you need find <em>you</em>. Then meet them at Pitch Night.</p>
-          <a href="#matchmaking" class="btn btn-primary mt-2">See how it works <span class="arrow">→</span></a></div>
+  <section class="section"><div class="container sec-grid">
+    <span class="label">02 — What we do</span>
+    <div>
+      <h2>Learn, connect, build, pitch.</h2>
+      <div class="cols mt-4">
+        ${[["Learn", "Workshops, founder talks, case studies and a growing library of resources.", ["Knowledge sessions", "Startup case studies", "Founder interviews"]],
+           ["Connect", "Meet people with complementary skills. Find co-founders and collaborators.", ["Co-founder matchmaking", "Member profiles", "Community meets"]],
+           ["Build", "Move from idea to execution on real problems with real teams.", ["Ideation sessions", "Validation exercises", "MVP challenges"]],
+           ["Pitch", "Present your work, get honest feedback, and find what comes next.", ["Pitch nights", "Demo days", "Mentor introductions"]]]
+          .map(([t, d, l], i) => `<div class="col"><span class="label">0${i + 1}</span><h3>${t}</h3><p>${d}</p><ul>${l.map((x) => `<li>${x}</li>`).join("")}</ul></div>`).join("")}
       </div>
-    </div></section>
+    </div>
+  </div></section>
 
-    <section class="section" style="padding-top:0"><div class="container">
-      <div class="section-head reveal"><div><span class="eyebrow">How we operate</span><h2>Four pillars.</h2></div>
-        <p class="lead">From your first “what's a cap table?” to your first demo day.</p></div>
-      <div class="pillars reveal">
-        ${[["Learn", "Workshops, founder talks, case studies and curated resources.", ["Knowledge sessions", "Startup case studies", "Founder interviews"]],
-           ["Connect", "Meet people with complementary skills and a shared drive.", ["Co-founder matchmaking", "Builder profiles", "Networking meets"]],
-           ["Build", "Move from idea to execution with real problems and real teams.", ["Ideation sessions", "Validation exercises", "MVP challenges"]],
-           ["Pitch & Grow", "Present, get honest feedback, and find what's next.", ["Mock pitches", "Demo days", "Mentor & investor intros"]]]
-          .map(([t, d, l], i) => `<div class="pillar"><div class="step">0${i + 1}</div><h3>${t}</h3><p class="muted small">${d}</p><ul>${l.map((x) => `<li>${x}</li>`).join("")}</ul></div>`).join("")}
-      </div>
-    </div></section>
+  <section class="section"><div class="container">
+    <div class="sec-head"><div><span class="label">03 — Open ventures</span><h2 class="mt-2">Ideas looking for builders.</h2></div>
+      <a href="#matchmaking" class="arrow-link">All ventures</a></div>
+    <div class="list">${ventureHead()}${vs.map(ventureRow).join("") || `<div class="empty">No ventures listed yet. Be the first.</div>`}</div>
+  </div></section>
 
-    <section class="section" style="padding-top:0"><div class="container">
-      <div class="section-head reveal"><div><span class="eyebrow">Co-founder matchmaking</span><h2>Find <span class="slash">/</span> Match <span class="slash">/</span> Build</h2></div>
-        <a href="#matchmaking" class="btn btn-ghost">Browse all ventures <span class="arrow">→</span></a></div>
-      <div class="steps-line reveal">
-        <div class="step-card"><span class="spaced">01 · Founders</span><h3>Post your idea</h3><p class="muted">Tell us what you're building and who you need. We share it with the whole community.</p></div>
-        <div class="step-card"><span class="spaced">02 · Builders</span><h3>Apply to ventures</h3><p class="muted">Create a profile with your skills and interests. Apply to the ideas that excite you.</p></div>
-        <div class="step-card"><span class="spaced">03 · Pitch Night</span><h3>Meet in person</h3><p class="muted">Founders pitch to the room. Conversations start. Teams form.</p></div>
-      </div>
-      <div class="grid g3 mt-3 reveal">${D.ventures.slice(0, 3).map(ventureCard).join("")}</div>
-    </div></section>
+  <section class="section"><div class="container">
+    <div class="feature">
+      <div><span class="label">04 — Validate</span>
+        <h2 class="mt-2">Test your idea <em>before</em> you build it.</h2>
+        <p class="lead mt-3">Most startups fail because nobody needed what they built. Run our seven-question check in two minutes, or go deeper with VistaDex, built by an FBC member.</p>
+        <div class="row mt-4"><a href="#validate" class="btn btn-primary">Check my idea</a></div></div>
+      <div><ol>
+        <li><div><h3>Name the problem</h3><p class="small mt-1">In one sentence, without mentioning your solution.</p></div></li>
+        <li><div><h3>Find who has it</h3><p class="small mt-1">A specific group you can reach this week, not "everyone".</p></div></li>
+        <li><div><h3>Look for proof</h3><p class="small mt-1">Workarounds, money spent, people asking to pay.</p></div></li>
+      </ol></div>
+    </div>
+  </div></section>
 
-    <section class="section" style="padding-top:0"><div class="container">
-      <a href="#validate" class="card hover newsletter reveal" style="display:grid">
-        <div><span class="eyebrow">Featured tool · VistaDex</span><h2 class="mt-1">Not sure your idea is worth building?</h2>
-          <p class="lead mt-1">Validate it first. Run a quick idea check, or go deeper with VistaDex, built by an FBC member.</p></div>
-        <div style="justify-self:end"><span class="btn btn-primary">Validate my idea <span class="arrow">→</span></span></div>
-      </a>
-    </div></section>
+  <section class="section"><div class="container">
+    <div class="sec-head"><div><span class="label">05 — Upcoming</span><h2 class="mt-2">Events</h2></div><a href="#events" class="arrow-link">All events</a></div>
+    <div class="list">${up.map((e) => eventRow(e, rsvps)).join("") || `<div class="empty">New events are announced soon.</div>`}</div>
+  </div></section>
 
-    <section class="section" style="padding-top:0"><div class="container">
-      <div class="section-head reveal"><div><span class="eyebrow">Upcoming</span><h2>Events by FBC</h2></div><a href="#events" class="btn btn-ghost">All events <span class="arrow">→</span></a></div>
-      <div class="grid reveal">${upcoming.map(eventCard).join("")}</div>
-    </div></section>
+  <section class="section"><div class="container">
+    <div class="sec-head"><div><span class="label">06 — Journal</span><h2 class="mt-2">Startup stories and analysis</h2></div><a href="#journal" class="arrow-link">Read the journal</a></div>
+    <div class="grid g3">${ps.map(postCard).join("")}</div>
+  </div></section>
+  ${cta()}`;
+};
 
-    <section class="section" style="padding-top:0"><div class="container">
-      <div class="section-head reveal"><div><span class="eyebrow">The Journal</span><h2>Startup stories & analysis</h2></div><a href="#journal" class="btn btn-ghost">Read the journal <span class="arrow">→</span></a></div>
-      <div class="grid g3 reveal">${D.posts.slice(0, 3).map(postCard).join("")}</div>
-    </div></section>
-    ${ctaBand()}`;
-  };
-
-  /* ---------- AUTH ---------- */
-  const authSide = (quote) => `
-    <aside class="auth-side">
-      <a href="#home" class="brand"><span class="brand-mark">FBC<span class="dot"></span></span><span class="brand-sub">Founders &amp; Builders<br/>Collective</span></a>
-      <blockquote>${quote}</blockquote>
-      <span class="spaced muted">Ideas <span class="slash">/</span> People <span class="slash">/</span> Impact</span>
-    </aside>`;
-
-  views.login = () => `
-    <section class="auth-wrap page-enter">
-      ${authSide("“People can only join you if they know what you are building.”")}
-      <div class="auth-main"><form class="auth-card" id="loginForm" novalidate>
-        <span class="eyebrow">Welcome back</span><h2 class="mt-1">Log in</h2>
-        <p class="muted mt-1">Use your BITS email to continue.</p>
-        <button type="button" class="btn btn-quiet btn-block mt-2" data-google>Continue with Google (BITS)</button>
-        <div class="divider">or</div>
-        <div class="field"><label>BITS email</label><input class="input" type="email" name="email" placeholder="f2024xxxx@pilani.bits-pilani.ac.in" required/></div>
-        <div class="field mt-1"><label>Password</label><input class="input" type="password" name="password" placeholder="••••••••" required/></div>
-        <p class="error mt-1" id="loginErr"></p>
-        <button class="btn btn-primary btn-block mt-2">Log in <span class="arrow">→</span></button>
-        <p class="small muted center mt-2">New here? <a href="#signup" class="link">Create an account</a></p>
-      </form></div>
-    </section>`;
-
-  views.signup = () => `
-    <section class="auth-wrap page-enter">
-      ${authSide("“We want to learn entrepreneurship. If you are willing to join us, let's learn it together.”")}
-      <div class="auth-main"><form class="auth-card" id="signupForm" novalidate>
-        <span class="eyebrow">Join the collective</span><h2 class="mt-1">Create your account</h2>
-        <p class="muted mt-1 small">I'm joining as…</p>
-        <div class="role-cards mt-1">
-          <div class="role-card on" data-role="founder"><div class="emoji">💡</div><b>Founder</b><small>I have an idea and need a team</small></div>
-          <div class="role-card" data-role="builder"><div class="emoji">🛠️</div><b>Builder</b><small>I want to join and build</small></div>
-          <div class="role-card" data-role="explorer"><div class="emoji">🧭</div><b>Explorer</b><small>Just curious about startups</small></div>
-        </div>
-        <div class="field mt-2"><label>Full name</label><input class="input" name="name" placeholder="Your name" required/></div>
-        <div class="field mt-1"><label>BITS email</label><input class="input" type="email" name="email" placeholder="f2024xxxx@pilani.bits-pilani.ac.in" required/>
-          <span class="hint">We only accept BITS emails so the community stays campus-first.</span></div>
-        <div class="field mt-1"><label>Password</label><input class="input" type="password" name="password" placeholder="At least 8 characters" required/></div>
-        <p class="error mt-1" id="signupErr"></p>
-        <button class="btn btn-primary btn-block mt-2">Continue to profile setup <span class="arrow">→</span></button>
-        <p class="hint center mt-1">Next you can fill your profile by hand, or let your AI do it in about 2 minutes.</p>
-        <p class="small muted center mt-2">Already a member? <a href="#login" class="link">Log in</a></p>
-      </form></div>
-    </section>`;
-
-  /* ---------- ONBOARDING / PROFILE SETUP ---------- */
-  // ob.mode: null = choose method, "ai" = copy prompt / paste reply, "review" = check AI-filled profile, "manual" = 3-step form
-  let ob = { step: 0, mode: null };
-  const AVAIL = ["< 5 hrs/week", "5–10 hrs/week", "10–20 hrs/week", "20+ hrs/week"];
-  const EQUITY = ["Co-founder equity", "Open to discuss", "Paid + ESOP", "Not decided yet"];
-  const LOOKING = ["Join a venture as a co-founder", "Early team member role", "Internships at startups", "Just learning and exploring"];
-  const isFounder = (u) => u.role === "founder";
-  const roleName = (u) => (isFounder(u) ? "Founder" : u.role === "builder" ? "Builder" : "Explorer");
-  const stepLabels = (u) => (isFounder(u) ? ["About you", "Your venture", "Who you need"] : ["About you", "Skills", "Interests"]);
-
-  const stepBody = (s, u) => {
-    const founder = isFounder(u);
-    const chips = (list, key) => `<div class="chip-select" data-chips="${key}">${list.map((x) => `<button type="button" class="chip ${(u[key] || []).includes(x) ? "on" : ""}">${x}</button>`).join("")}</div>`;
-    const opts = (list, val) => `<option value="" ${val ? "" : "selected"} disabled>Choose…</option>` + list.map((o) => `<option ${val === o ? "selected" : ""}>${o}</option>`).join("");
-    if (s === 0) return `
-      <div class="form-grid">
-        <div class="field"><label>Full name</label><input class="input" name="name" value="${esc(u.name)}"/></div>
-        <div class="field"><label>Year & branch</label><input class="input" name="year" value="${esc(u.year || "")}" placeholder="e.g. 2nd year, CS"/></div>
-        <div class="field full"><label>One-line bio</label><input class="input" name="bio" value="${esc(u.bio || "")}" placeholder="What drives you?"/></div>
-        <div class="field"><label>LinkedIn</label><input class="input" name="linkedin" value="${esc(u.linkedin || "")}" placeholder="linkedin.com/in/…"/></div>
-        <div class="field"><label>Availability</label><select class="input" name="avail">${opts(AVAIL, u.avail)}</select></div>
-      </div>`;
-    if (s === 1 && founder) return `
-      <div class="form-grid">
-        <div class="field"><label>Venture name</label><input class="input" name="vname" value="${esc(u.vname || "")}" placeholder="Working name is fine"/></div>
-        <div class="field"><label>Stage</label><select class="input" name="vstage">${D.stages.map((o, i) => `<option value="${i}" ${+u.vstage === i ? "selected" : ""}>${o}</option>`).join("")}</select></div>
-        <div class="field full"><label>The problem you're solving</label><textarea class="input" name="vproblem" placeholder="Who has this problem, and how do they deal with it today?">${esc(u.vproblem || "")}</textarea></div>
-        <div class="field full"><label>One-line pitch</label><input class="input" name="vpitch" value="${esc(u.vpitch || "")}" placeholder="We help ___ do ___ by ___"/></div>
-        <div class="field full"><label>Domain</label>${chips(D.domains, "domains")}</div>
-      </div>`;
-    if (s === 1) return `<div class="field"><label>What can you bring to a team? Pick all that apply.</label>${chips(D.skills, "skills")}</div>
-      <div class="field mt-2"><label>Anything you've built or worked on?</label><textarea class="input" name="work" placeholder="Projects, internships, links…">${esc(u.work || "")}</textarea></div>`;
-    if (s === 2 && founder) return `<div class="field"><label>Skills you're looking for in a co-founder</label>${chips(D.skills, "needs")}</div>
-      <div class="form-grid mt-2"><div class="field"><label>Expected commitment</label><input class="input" name="commit" value="${esc(u.commit || "")}" placeholder="e.g. 10–15 hrs/week"/></div>
-      <div class="field"><label>Equity / compensation</label><select class="input" name="equity">${opts(EQUITY, u.equity)}</select></div>
-      <div class="field full"><label><input type="checkbox" name="pitchnight" ${u.pitchnight ? "checked" : ""}/> &nbsp;I'd like to pitch at the next Pitch Night</label></div></div>`;
-    return `<div class="field"><label>Domains that excite you</label>${chips(D.domains, "domains")}</div>
-      <div class="field mt-2"><label>What are you looking for?</label><select class="input" name="looking">${opts(LOOKING, u.looking)}</select></div>`;
-  };
-
-  /* ----- AI import: the prompt people paste into their own chatbot ----- */
-  const aiTemplate = (u) => isFounder(u)
-    ? { name: "", year_and_branch: "", one_line_bio: "", linkedin: "", availability: "", venture_name: "", stage: "", problem: "", one_line_pitch: "", domains: [], skills_needed: [], commitment: "", equity: "" }
-    : { name: "", year_and_branch: "", one_line_bio: "", linkedin: "", availability: "", skills: [], past_work: "", domains: [], looking_for: "" };
-
-  const aiPrompt = (u) => {
-    const founder = isFounder(u);
-    const lists = founder
-      ? [["availability", AVAIL], ["stage", D.stages], ["domains (pick 1–3)", D.domains], ["skills_needed (pick 1–4)", D.skills], ["equity", EQUITY]]
-      : [["availability", AVAIL], ["skills (pick 1–5)", D.skills], ["domains (pick 1–4)", D.domains], ["looking_for", LOOKING]];
-    return `I'm joining the Founders and Builders Collective (FBC), a student startup community at BITS Pilani, and setting up my ${founder ? "FOUNDER" : roleName(u).toUpperCase()} profile. ${founder
-      ? "Founders list their idea so students with the right skills can apply to join as co-founders."
-      : "Members list their skills and interests so founders can find them, and they can apply to join ventures."}
-
-Using what you already know about me${founder ? " and my project" : ""} from our past conversations, fill in the profile below.
-
-Rules:
-1. Only use what you actually know. If you're not sure about a field, leave it as "". Don't guess, and don't exaggerate ${founder ? "traction" : "experience"}.
-2. Leave out anything confidential or sensitive: phone numbers, grades, passwords, unreleased financials, private details about other people${founder ? ", or anything about the project I've asked you to keep secret" : ""}. If you're unsure whether something is OK to share, ask me first.
-3. If you don't know enough about me, interview me instead: ask me short questions one at a time (no more than 8), then fill in the profile.
-4. For these fields, use ONLY values from the lists:
-${lists.map(([k, l]) => `   - ${k}: ${l.join(" | ")}`).join("\n")}
-5. Keep it short: bio under 20 words${founder ? ", pitch under 25 words, problem under 60 words" : ", past_work under 60 words"}.
-6. When you're done, reply with ONLY the filled-in JSON in a single code block, then one line saying which fields you left blank.
-
-\`\`\`json
-${JSON.stringify(aiTemplate(u), null, 2)}
-\`\`\``;
-  };
-
-  // A deliberately messy reply, so the team can demo the import without a chatbot
-  const aiSample = (u) => isFounder(u)
-    ? `Sure! Based on what we've discussed, here's your FBC profile:
-
-\`\`\`json
-{
-  "name": "${u.name}",
-  "year_and_branch": "1st year, Mechanical",
-  "one_line_bio": "Mech fresher obsessed with making campus transport cleaner and cheaper.",
-  "linkedin": "",
-  "availability": "around 15 hours a week",
-  "venture_name": "Voltway",
-  "stage": "building a prototype",
-  "problem": "Students with e-cycles and e-scooters lose hours charging them, and hostel sockets are limited. Many give up and go back to petrol or walking.",
-  "one_line_pitch": "Battery-swap stations for campus e-scooters: swap in 30 seconds, pay per swap.",
-  "domains": ["ClimateTech", "hardware"],
-  "skills_needed": ["embedded systems", "Finance", "operations"],
-  "commitment": "10-15 hrs/week",
-  "equity": "co-founder equity",
+/* ---------- matchmaking ---------- */
+views.matchmaking = async () => {
+  const ventures = await db.list("ventures");
+  S.cache.ventures = ventures.sort(byDateDesc("updatedAt"));
+  S.cache.builders = S.user ? (await db.members("builder").catch(() => [])).filter((b) => b.id !== S.user.uid) : null;
+  const t = S.mm.tab;
+  return `
+  ${pageHead("Co-founder matchmaking", "Find, match, build.", "Founders list their idea and the skills they need. Builders apply to the ventures they believe in. Everyone meets at Pitch Night.",
+    `<div class="row"><a href="#join" class="btn btn-primary" data-act="pick-role" data-role="founder">List your idea</a><a href="#join" class="btn" data-act="pick-role" data-role="builder">Create a builder profile</a></div>`)}
+  <section class="container" style="padding-bottom:96px">
+    <div class="toolbar">
+      <div class="seg" role="tablist"><button data-act="mm-tab" data-tab="ventures" class="${t === "ventures" ? "on" : ""}">Ventures <span class="faint">${ventures.length}</span></button><button data-act="mm-tab" data-tab="builders" class="${t === "builders" ? "on" : ""}">Builders</button></div>
+      <input class="input grow" id="mmQ" placeholder="Search ${t}" value="${esc(S.mm.q)}" aria-label="Search"/>
+      <select class="input" id="mmDomain" aria-label="Domain"><option value="">All domains</option>${C.DOMAINS.map((d) => `<option ${S.mm.domain === d ? "selected" : ""}>${d}</option>`).join("")}</select>
+      <select class="input" id="mmSkill" aria-label="Skill"><option value="">${t === "ventures" ? "Any skill needed" : "Any skill"}</option>${C.SKILLS.map((d) => `<option ${S.mm.skill === d ? "selected" : ""}>${d}</option>`).join("")}</select>
+    </div>
+    <div class="list" id="mmList">${mmList()}</div>
+  </section>`;
+};
+function mmList() {
+  const { tab, q, domain, skill } = S.mm;
+  const qq = q.toLowerCase();
+  if (tab === "ventures") {
+    const rows = (S.cache.ventures || []).filter((v) => (!qq || `${v.name} ${v.pitch} ${v.founderName}`.toLowerCase().includes(qq)) && (!domain || (v.domains || []).includes(domain)) && (!skill || (v.needs || []).includes(skill)));
+    return ventureHead() + (rows.map(ventureRow).join("") || `<div class="empty">No ventures match those filters.</div>`);
+  }
+  if (!S.cache.builders) return signInPrompt("see builder profiles");
+  const rows = S.cache.builders.filter((b) => (!qq || `${b.name} ${b.bio} ${b.looking}`.toLowerCase().includes(qq)) && (!domain || (b.domains || []).includes(domain)) && (!skill || (b.skills || []).includes(skill)));
+  return rows.map((b) => `
+    <div class="list-row" style="grid-template-columns:auto 2fr 1.4fr auto">
+      ${avatar(b.name, b.photo)}
+      <div><span class="title">${esc(b.name)}</span> <span class="xs faint">${esc(b.year || "")}</span><div class="tagline">${esc(b.bio || b.looking || "")}</div></div>
+      <div class="small muted">${esc((b.skills || []).join(", "))}</div>
+      ${isFounder(S.profile) ? `<button class="btn btn-sm" data-act="invite" data-name="${esc(b.name)}" data-email="${esc(b.email || "")}">Invite</button>` : `<span></span>`}
+    </div>`).join("") || `<div class="empty">No builders match those filters yet.</div>`;
 }
-\`\`\`
-Left blank: linkedin (I don't know your profile URL).`
-    : `Here you go:
 
-\`\`\`json
-{
-  "name": "${u.name}",
-  "year_and_branch": "2nd year, CS",
-  "one_line_bio": "I build web apps fast and like turning rough ideas into working products.",
-  "linkedin": "",
-  "availability": "8 hrs/week",
-  "skills": ["React", "Node backend", "Figma", "machine learning"],
-  "past_work": "Built a hostel laundry-booking app used by 300 students; summer intern at a fintech startup working on the dashboard.",
-  "domains": ["EdTech", "fintech", "AI"],
-  "looking_for": "I want to join an early-stage team as a technical co-founder"
+async function ventureModal(id) {
+  const v = (S.cache.ventures || []).find((x) => x.id === id) || await db.get("ventures", id);
+  if (!v) return toast("That venture is no longer listed");
+  const mine = S.user && v.founderUid === S.user.uid;
+  const apps = S.user && !mine ? await db.myApplications(S.user.uid).catch(() => []) : [];
+  const applied = apps.find((a) => a.ventureId === v.id);
+  let action;
+  if (!S.user) action = `<div class="mt-4"><p class="small">Sign in with your BITS account to apply.</p><a class="btn btn-primary mt-2" href="#login" data-close>Sign in to apply</a></div>`;
+  else if (mine) action = `<p class="small mt-4">This is your venture. Manage it from your <a class="link" href="#dashboard" data-close>dashboard</a>.</p>`;
+  else if (applied) action = `<div class="notice mt-4"><span>You applied on ${fmtDate(applied.createdAt)}. Status: <span class="status ${applied.status}">${statusLabel(applied.status)}</span></span></div>`;
+  else action = `<form data-form="apply" data-id="${esc(v.id)}" class="mt-4">
+      <div class="field"><label for="applyMsg">Why do you want to build this, and what would you bring?</label><textarea class="input" id="applyMsg" name="message" required maxlength="2000" placeholder="Keep it short and honest. The founder sees your profile too."></textarea></div>
+      <button class="btn btn-primary mt-2">Apply to join ${esc(v.name)}</button></form>`;
+  openModal(`
+    <span class="label">${esc((v.domains || []).join(" · "))}</span>
+    <h2 id="modalTitle" class="mt-1">${esc(v.name)}</h2>
+    <p class="small mt-1">${esc(v.founderName || "")}${v.founderYear ? ", " + esc(v.founderYear) : ""}</p>
+    <p class="mt-3" style="color:var(--text)">${esc(v.pitch)}</p>
+    ${v.problem ? `<p class="mt-2">${esc(v.problem)}</p>` : ""}
+    <table class="table mt-3"><tbody>
+      <tr><td>Stage</td><td>${stageBar(v.stage)}${esc(C.STAGES[v.stage] || "")}</td></tr>
+      <tr><td>Looking for</td><td>${esc((v.needs || []).join(", "))}</td></tr>
+      ${v.commitment ? `<tr><td>Commitment</td><td>${esc(v.commitment)}</td></tr>` : ""}
+      ${v.equity ? `<tr><td>Equity</td><td>${esc(v.equity)}</td></tr>` : ""}
+    </tbody></table>
+    ${action}`);
 }
-\`\`\`
-Left blank: linkedin.`;
 
-  /* ----- AI import: reading the reply back ----- */
-  const norm = (s) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-  const SYN = {
-    "Full-stack dev": ["full stack", "fullstack", "web", "frontend", "front end", "backend", "back end", "react", "node", "javascript", "developer", "software", "coding", "programming", "app", "android", "ios", "flutter", "sde"],
-    "ML engineer": ["ml", "machine learning", "ai", "deep learning", "data science", "computer vision", "nlp", "llm", "data scientist"],
-    "Hardware / IoT": ["hardware", "iot", "embedded", "electronics", "robotics", "circuit", "pcb", "arduino", "firmware"],
-    "Design / UX": ["design", "designer", "ux", "ui", "figma", "graphic", "graphics"],
-    "Product": ["product", "pm", "product manager", "product management"],
-    "Growth / Marketing": ["marketing", "growth", "social media", "seo", "community", "branding"],
-    "Sales / BD": ["sales", "bd", "business development", "partnerships", "outreach"],
-    "Finance": ["finance", "financial", "accounting", "fundraising", "financial modelling", "financial modeling"],
-    "Content": ["content", "writing", "copywriting", "video", "editing", "blog"],
-    "Operations": ["operations", "ops", "logistics", "supply chain"],
-    "AI / ML": ["ai", "ml", "machine learning", "artificial intelligence", "genai", "llm"],
-    "SaaS": ["saas", "b2b software", "enterprise software", "software"],
-    "FinTech": ["fintech", "payments", "finance", "banking", "upi"],
-    "HealthTech": ["health", "healthtech", "medical", "medtech", "healthcare", "biotech"],
-    "EdTech": ["edtech", "education", "learning", "teaching"],
-    "ClimateTech": ["climate", "cleantech", "sustainability", "energy", "ev", "renewable", "mobility"],
-    "D2C / Consumer": ["d2c", "consumer", "ecommerce", "e commerce", "retail", "brand", "food"],
-    "Deep Tech": ["deep tech", "deeptech", "robotics", "semiconductor", "hardware", "aerospace", "quantum"],
-    "AgriTech": ["agri", "agritech", "agriculture", "farming", "farmers"],
-    "Social Impact": ["social", "impact", "ngo", "nonprofit", "non profit"],
-    "Co-founder equity": ["equity", "co founder", "cofounder"],
-    "Paid + ESOP": ["paid", "stipend", "salary", "esop"],
-    "Open to discuss": ["discuss", "open", "flexible", "negotiable"],
-    "Not decided yet": ["not decided", "undecided", "tbd", "unsure"],
-    "Join a venture as a co-founder": ["co founder", "cofounder"],
-    "Early team member role": ["team member", "early team", "early stage", "join a team"],
-    "Internships at startups": ["intern", "internship", "internships"],
-    "Just learning and exploring": ["learn", "learning", "explore", "exploring", "curious"],
-  };
-  const has = (n, w) => (" " + n + " ").includes(" " + w + " ");
-  const matchOne = (val, options) => {
-    const n = norm(val);
-    if (!n) return null;
-    return options.find((o) => norm(o) === n)
-      || options.find((o) => (SYN[o] || []).some((w) => has(n, w)))
-      || options.find((o) => n.length > 3 && norm(o).includes(n))
-      || null;
-  };
-  const matchList = (val, options) => {
-    const items = Array.isArray(val) ? val : String(val ?? "").split(/[,;\n]+/);
-    const hits = [], misses = [];
-    items.map((x) => String(x).trim()).filter(Boolean).forEach((x) => {
-      const m = matchOne(x, options);
-      if (m) { if (!hits.includes(m)) hits.push(m); } else misses.push(x);
-    });
-    return { hits, misses };
-  };
-  const matchStage = (val) => {
-    if (typeof val === "number" && D.stages[val]) return val;
-    const n = norm(val);
-    if (!n) return null;
-    const exact = D.stages.findIndex((s) => norm(s) === n);
-    if (exact >= 0) return exact;
-    if (/revenue|paying|profit|sales/.test(n)) return 4;
-    if (/users|beta|pilot|launched|customers|live/.test(n)) return 3;
-    if (/mvp|prototype|building|build|develop/.test(n)) return 2;
-    if (/validat|interview|research|survey|testing/.test(n)) return 1;
-    if (/idea|concept|thinking/.test(n)) return 0;
-    return null;
-  };
-  const matchAvail = (val) => {
-    const direct = matchOne(val, AVAIL);
-    if (direct && norm(val) === norm(direct)) return direct;
-    const nums = String(val ?? "").match(/\d+/g);
-    if (!nums) return null;
-    const h = Math.max(...nums.map(Number));
-    return h < 5 ? AVAIL[0] : h <= 10 ? AVAIL[1] : h <= 20 ? AVAIL[2] : AVAIL[3];
-  };
-
-  const extractJSON = (text) => {
-    let t = String(text);
-    const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
-    if (fence) t = fence[1];
-    const a = t.indexOf("{"), b = t.lastIndexOf("}");
-    if (a < 0 || b <= a) throw new Error("no-json");
-    const raw = t.slice(a, b + 1);
-    const tries = [raw, raw.replace(/,\s*([}\]])/g, "$1"), raw.replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/,\s*([}\]])/g, "$1")];
-    for (const s of tries) { try { return JSON.parse(s); } catch {} }
-    throw new Error("bad-json");
-  };
-
-  const ALIASES = {
-    name: ["name", "full name", "fullname"],
-    year: ["year and branch", "year branch", "year", "branch"],
-    bio: ["one line bio", "bio", "tagline", "about"],
-    linkedin: ["linkedin", "linkedin url"],
-    avail: ["availability", "hours per week", "time commitment", "avail"],
-    vname: ["venture name", "startup name", "project name", "company name"],
-    vstage: ["stage", "venture stage", "startup stage"],
-    vproblem: ["problem", "the problem", "problem statement"],
-    vpitch: ["one line pitch", "pitch", "elevator pitch"],
-    domains: ["domains", "domain", "industry", "industries", "interests"],
-    needs: ["skills needed", "looking for skills", "cofounder skills", "needs"],
-    commit: ["commitment", "expected commitment"],
-    equity: ["equity", "compensation"],
-    skills: ["skills", "my skills"],
-    work: ["past work", "work", "projects", "experience"],
-    looking: ["looking for", "goal"],
-  };
-
-  // Returns the fields to merge into the profile, plus which were AI-filled, left blank, or didn't match our lists
-  const parseAiReply = (text, u) => {
-    const obj = extractJSON(text);
-    const flat = {};
-    const walk = (o) => Object.entries(o || {}).forEach(([k, v]) => {
-      if (v && typeof v === "object" && !Array.isArray(v)) walk(v); else flat[norm(k)] = v;
-    });
-    walk(obj);
-    const get = (key) => { for (const a of ALIASES[key]) if (flat[a] !== undefined) return flat[a]; return undefined; };
-    const str = (v) => (Array.isArray(v) ? v.join(", ") : String(v ?? "")).trim().slice(0, 600);
-
-    const founder = isFounder(u);
-    const keys = founder
-      ? ["name", "year", "bio", "linkedin", "avail", "vname", "vstage", "vproblem", "vpitch", "domains", "needs", "commit", "equity"]
-      : ["name", "year", "bio", "linkedin", "avail", "skills", "work", "domains", "looking"];
-    const out = {}, ai = [], blank = [], unmatched = [];
-    keys.forEach((k) => {
-      const v = get(k);
-      let val = null;
-      if (k === "domains" || k === "needs" || k === "skills") {
-        const { hits, misses } = matchList(v, k === "domains" ? D.domains : D.skills);
-        unmatched.push(...misses);
-        val = hits.length ? hits : null;
-      } else if (k === "vstage") val = matchStage(v);
-      else if (k === "avail") val = matchAvail(v);
-      else if (k === "equity") val = matchOne(v, EQUITY);
-      else if (k === "looking") val = matchOne(v, LOOKING);
-      else val = str(v) || null;
-      if (val === null || val === undefined) { blank.push(k); if (str(v) && !["domains", "needs", "skills"].includes(k)) unmatched.push(str(v)); }
-      else { out[k] = val; ai.push(k); }
-    });
-    if (!ai.length) throw new Error("empty");
-    return { out, ai, blank, unmatched };
-  };
-
-  const FIELD_LABEL = { name: "Full name", year: "Year & branch", bio: "Bio", linkedin: "LinkedIn", avail: "Availability", vname: "Venture name", vstage: "Stage", vproblem: "Problem", vpitch: "Pitch", domains: "Domains", needs: "Skills needed", commit: "Commitment", equity: "Equity", skills: "Skills", work: "Past work", looking: "Looking for" };
-
-  views.onboarding = () => {
-    const u = user();
-    if (!u) return redirect("signup");
-    const founder = isFounder(u);
-    const labels = stepLabels(u);
-    const head = (sub, title, lead = "") => `<span class="eyebrow">Profile setup · ${roleName(u)}${sub ? " · " + sub : ""}</span>
-      <h2 class="mt-1">${title}</h2>${lead ? `<p class="muted mt-1">${lead}</p>` : ""}`;
-
-    /* 1. choose how to fill it */
-    if (!ob.mode) return `
-    <section class="section-sm page-enter"><div class="narrow">
-      ${head("", "How do you want to set up your profile?", founder ? "We need your venture, the problem you're solving and who you're looking for." : "We need your skills, interests and what you're looking for.")}
-      <div class="ob-choice mt-3">
-        <button class="card hover ob-option" data-obmode="ai">
-          <span class="tag gold">Recommended · ~2 min</span>
-          <div class="icon-box mt-2">${I.bulb}</div>
-          <h3>Fill it with your AI</h3>
-          <p class="muted small">Your chatbot already knows ${founder ? "your project" : "you"}. Copy our prompt into ChatGPT, Claude, Gemini or any assistant, then paste its reply back. You review everything before it's saved.</p>
-          <span class="link small mt-1">Use my AI →</span>
-        </button>
-        <button class="card hover ob-option" data-obmode="manual">
-          <span class="tag">~5 min</span>
-          <div class="icon-box mt-2">${I.pen}</div>
-          <h3>Fill it in manually</h3>
-          <p class="muted small">Three short steps: ${labels.join(", ").toLowerCase()}.</p>
-          <span class="link small mt-1">Fill manually →</span>
-        </button>
+/* ---------- validate ---------- */
+const QUESTIONS = [
+  ["problem", "I can describe the problem in one sentence, without mentioning my solution."],
+  ["who", "I know exactly who has this problem: a specific group, not “everyone”."],
+  ["talked", "I've talked to at least 10 people who have this problem."],
+  ["pain", "They're actively trying to solve it today, with workarounds, money or time."],
+  ["alt", "I know the existing alternatives and why they fall short."],
+  ["pay", "Someone has said they'd pay, pre-order, or sign up for this."],
+  ["why", "I know why we're the right people to build this, and why now."],
+];
+const ideaScore = (ans) => Math.round((Object.values(ans || {}).reduce((a, b) => a + b, 0) / (QUESTIONS.length * 2)) * 100);
+views.validate = async () => {
+  const s = S.settings;
+  return `
+  ${pageHead("Validate", "Test it <em>before</em> you build it.", "Most startups don't fail because they can't build. They fail because nobody needed what they built.")}
+  <section class="section first"><div class="container">
+    <div class="feature">
+      <div><span class="label gold">Featured tool</span>
+        <h2 class="mt-2">VistaDex</h2>
+        <p class="lead mt-3">${esc(s.vistadexBlurb)}</p>
+        <p class="small mt-2">Built by an FBC member. Free for the community.</p>
+        <div class="row mt-4">${s.vistadexUrl ? `<a class="btn btn-primary" href="${esc(s.vistadexUrl)}" target="_blank" rel="noopener">Open VistaDex ↗</a>` : `<button class="btn" disabled>Link coming soon</button>`}<a class="arrow-link" href="#validate" data-act="scroll" data-to="quickcheck">Or try the quick check</a></div></div>
+      <div><ol>
+        <li><div><h3>Market and problem</h3><p class="small mt-1">Is the problem real, and big enough to matter?</p></div></li>
+        <li><div><h3>Competition</h3><p class="small mt-1">Who else is solving it, and how you're different.</p></div></li>
+        <li><div><h3>Risks and next steps</h3><p class="small mt-1">What to test next, in order.</p></div></li>
+      </ol></div>
+    </div>
+  </div></section>
+  <section class="section" id="quickcheck"><div class="narrow">
+    <span class="label">Quick idea check · Free, no sign-in</span>
+    <h2 class="mt-2">How validated is your idea?</h2>
+    <p class="mt-2">Be honest. ${S.user ? "Your result is saved to your dashboard, visible only to you." : "Nothing is saved unless you're signed in."}</p>
+    <form data-form="ideacheck" class="mt-4">
+      <div class="field"><label for="idea">Your idea in one line</label><input class="input" id="idea" name="idea" placeholder="Battery-swap stations for campus e-scooters" required maxlength="200"/></div>
+      <div class="list mt-3">
+      ${QUESTIONS.map(([k, q], i) => `
+        <div class="list-row" style="grid-template-columns:2rem 1fr auto">
+          <span class="label">0${i + 1}</span><span>${q}</span>
+          <div class="seg" data-q="${k}">${["No", "Partly", "Yes"].map((o, j) => `<button type="button" data-act="answer" data-v="${j}">${o}</button>`).join("")}</div>
+        </div>`).join("")}
       </div>
-      <p class="center mt-2"><a href="#dashboard" class="link small">Skip for now</a></p>
-    </div></section>`;
-
-    /* 2. AI: copy prompt, paste reply */
-    if (ob.mode === "ai") return `
-    <section class="section-sm page-enter"><div class="narrow">
-      ${head("With your AI", "Let your AI do the paperwork.", "Copy the prompt, paste it into the chatbot you use most, then paste its reply below.")}
-      <div class="grid mt-3">
-        <div class="card ai-step">
-          <div class="ai-step-head"><span class="ai-num">01</span><div><h3>Copy this prompt</h3><p class="small muted">Works with ChatGPT, Claude, Gemini, Copilot and others. It works best in the chat or project where you've talked about ${founder ? "your idea" : "your work"}.</p></div></div>
-          <textarea class="input prompt-box" id="aiPrompt" readonly>${esc(aiPrompt(u))}</textarea>
-          <div class="ai-row"><button type="button" class="btn btn-primary btn-sm" data-copy-prompt>Copy prompt</button>
-            <span class="hint">AI doesn't know you yet? That's fine: it will ask you a few quick questions instead.</span></div>
-        </div>
-        <form class="card ai-step" id="aiImportForm">
-          <div class="ai-step-head"><span class="ai-num">02</span><div><h3>Paste your AI's reply</h3><p class="small muted">Paste the whole reply. Extra text around the code block is fine.</p></div></div>
-          <textarea class="input" name="reply" style="min-height:180px;font-family:ui-monospace,Menlo,monospace;font-size:.82rem" placeholder='\`\`\`json\n{ "name": "…", … }\n\`\`\`'></textarea>
-          <p class="error" id="aiErr"></p>
-          <div class="ai-row"><button class="btn btn-primary">Import &amp; review →</button>
-            <button type="button" class="btn btn-quiet btn-sm" data-ai-sample>Try a sample reply</button></div>
-        </form>
-        <div class="ai-privacy"><span class="icon-box" style="margin:0;width:38px;height:38px">${I.check}</span>
-          <p class="small muted">Your AI's reply is read here in your browser. Nothing goes on your profile until you've reviewed it and pressed save. Remove anything you don't want other members to see.</p></div>
-      </div>
-      <p class="center mt-2 small"><a href="javascript:void 0" class="link" data-obmode="">← Back</a> <span class="muted">·</span> <a href="javascript:void 0" class="link" data-obmode="manual">Fill manually instead</a></p>
-    </div></section>`;
-
-    /* 3. review AI-filled profile, all on one page */
-    if (ob.mode === "review") {
-      const blank = u._blank || [], unmatched = u._unmatched || [];
-      return `
-    <section class="section-sm page-enter"><div class="narrow">
-      ${head("Review", "Check what your AI filled in.", `Fields marked <span class="ai-badge">AI</span> came from your chatbot. Fix anything that's wrong, or that you don't want public.`)}
-      <div class="grid mt-2">
-        <div class="card ai-summary"><b class="accent">✓ ${(u._ai || []).length} fields filled</b>${blank.length ? `<span class="muted small">Still empty: ${blank.map((k) => FIELD_LABEL[k] || k).join(", ")}</span>` : `<span class="muted small">Nothing left empty.</span>`}</div>
-        ${unmatched.length ? `<div class="card ai-summary" style="border-color:rgba(245,184,41,.4)"><b class="gold">Didn't match our lists</b><span class="muted small">Your AI also said: ${unmatched.map((x) => `“${esc(x)}”`).join(", ")}. If any of these apply, pick the closest option below.</span></div>` : ""}
-      </div>
-      <form class="card mt-2" id="obForm" data-review style="padding:2rem">
-        ${[0, 1, 2].map((s) => `<h3 class="spaced gold review-h">${labels[s]}</h3>${stepBody(s, u)}`).join("")}
-        <div style="display:flex;justify-content:space-between;margin-top:2rem;gap:1rem;flex-wrap:wrap">
-          <button type="button" class="btn btn-quiet" data-obmode="ai">← Paste a different reply</button>
-          <button class="btn btn-primary">Looks good, save profile ✓</button>
-        </div>
-      </form>
-    </div></section>`;
-    }
-
-    /* 4. manual, 3 steps */
-    const s = ob.step;
-    return `
-    <section class="section-sm page-enter"><div class="narrow">
-      ${head("", ["Tell us about you", founder ? "What are you building?" : "What do you bring?", founder ? "Who do you need?" : "What excites you?"][s])}
-      <div class="stepper mt-2">${labels.map((l, i) => `<div class="${i < s ? "done" : i === s ? "cur" : ""}"><i></i><span>${l}</span></div>`).join("")}</div>
-      <form class="card" id="obForm" style="padding:2rem">${stepBody(s, u)}
-        <div style="display:flex;justify-content:space-between;margin-top:2rem;gap:1rem">
-          ${s > 0 ? `<button type="button" class="btn btn-quiet" data-ob="back">← Back</button>` : `<button type="button" class="btn btn-quiet" data-obmode="">← Back</button>`}
-          <button class="btn btn-primary">${s === 2 ? "Finish setup ✓" : "Next →"}</button>
-        </div>
-      </form>
-      <p class="center mt-2 small"><a href="javascript:void 0" class="link" data-obmode="ai">Use my AI instead</a></p>
-    </div></section>`;
-  };
-
-  /* ---------- DASHBOARD ---------- */
-  let dashTab = "overview";
-  views.dashboard = () => {
-    const u = user();
-    if (!u) return redirect("login");
-    const fields = ["name", "year", "bio", "linkedin", "avail", u.role === "founder" ? "vpitch" : "work"];
-    const extras = u.role === "founder" ? (u.needs || []).length : (u.skills || []).length;
-    const pct = Math.round(((fields.filter((f) => u[f]).length + (extras ? 1 : 0) + ((u.domains || []).length ? 1 : 0)) / (fields.length + 2)) * 100);
-    const apps = store.get("applications", []);
-    const rsvps = store.get("rsvps", []);
-    const checks = store.get("ideachecks", []);
-    const mine = new Set([...(u.skills || []), ...(u.needs || [])]);
-    const recVentures = [...D.ventures].map((v) => ({ ...v, score: 60 + v.needs.filter((n) => (u.skills || []).includes(n)).length * 15 + ((u.domains || []).includes(v.domain) ? 15 : 0) })).sort((a, b) => b.score - a.score).slice(0, 3);
-    const recBuilders = [...D.builders].map((b) => ({ ...b, score: 60 + b.skills.filter((s) => (u.needs || []).includes(s)).length * 18 + b.interests.filter((i) => (u.domains || []).includes(i)).length * 8 })).sort((a, b) => b.score - a.score).slice(0, 3);
-
-    const side = [["overview", "Overview", I.grid], ["matches", "Matches", I.users], ["applications", "Applications", I.brief], ["events", "My events", I.cal], ["profile", "Profile", I.user]]
-      .map(([k, l, ic]) => `<a href="javascript:void 0" data-dash="${k}" class="${dashTab === k ? "on" : ""}">${ic}${l}</a>`).join("") +
-      `<a href="#validate">${I.target}Validate idea</a><a href="javascript:void 0" data-logout>${I.out}Log out</a>`;
-
-    const recBlock = u.role === "founder"
-      ? `<h3>Builders who fit your venture</h3><p class="small muted">Based on the skills you're looking for.</p>
-         ${recBuilders.map((b) => `<div class="list-row"><span class="avatar">${initials(b.name)}</span><div class="grow"><b>${b.name}</b> <span class="small muted">· ${b.year}</span><div class="tags mt-1">${b.skills.map((s) => `<span class="tag ${mine.has(s) ? "gold" : ""}">${s}</span>`).join("")}</div></div><span class="match-score">${Math.min(b.score, 99)}%</span><button class="btn btn-ghost btn-sm" data-connect="${b.name}">Connect</button></div>`).join("")}`
-      : `<h3>Ventures that need you</h3><p class="small muted">Based on your skills and interests.</p>
-         ${recVentures.map((v) => `<div class="list-row"><div class="v-logo">${v.logo}</div><div class="grow"><b>${v.name}</b> <span class="small muted">· ${v.domain}</span><div class="tags mt-1">${v.needs.map((s) => `<span class="tag ${mine.has(s) ? "gold" : ""}">${s}</span>`).join("")}</div></div><span class="match-score">${Math.min(v.score, 99)}%</span><button class="btn btn-ghost btn-sm" data-venture="${v.id}">View</button></div>`).join("")}`;
-
-    const appsBlock = apps.length
-      ? apps.map((a) => { const v = D.ventures.find((x) => x.id === a.id); return v ? `<div class="list-row"><div class="v-logo">${v.logo}</div><div class="grow"><b>${v.name}</b><div class="small muted">Applied ${fmt(a.date)}</div></div><span class="status review">In review</span></div>` : ""; }).join("")
-      : `<div class="empty">No applications yet. <a href="#matchmaking" class="link">Browse ventures →</a></div>`;
-    const evBlock = rsvps.length ? rsvps.map((id) => D.events.find((e) => e.id === id)).filter(Boolean).map(eventCard).join("") : `<div class="empty">You haven't RSVP'd to anything yet. <a href="#events" class="link">See events →</a></div>`;
-
-    let main = "";
-    if (dashTab === "overview") main = `
-      <div class="grid g4">
-        <div class="card stat"><span class="small muted">Profile</span><b>${pct}%</b><div class="progress mt-1"><i style="width:${pct}%"></i></div></div>
-        <div class="card stat"><span class="small muted">${u.role === "founder" ? "Interested builders" : "Applications"}</span><b>${u.role === "founder" ? 5 : apps.length}</b></div>
-        <div class="card stat"><span class="small muted">Events RSVP'd</span><b>${rsvps.length}</b></div>
-        <div class="card stat"><span class="small muted">Idea checks</span><b>${checks.length}</b></div>
-      </div>
-      ${pct < 100 ? `<div class="card mt-2" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;border-color:rgba(245,184,41,.4)"><div><b>Complete your profile</b><p class="small muted">Complete profiles get matched first and show up higher in search.</p></div><div class="tags"><a href="javascript:void 0" data-obmode="ai" class="btn btn-primary btn-sm">Finish with my AI →</a><a href="javascript:void 0" data-obmode="manual" class="btn btn-quiet btn-sm">Fill manually</a></div></div>` : ""}
-      <div class="grid g2 mt-2" style="align-items:start">
-        <div class="card">${recBlock}</div>
-        <div class="card"><h3>Next up</h3>${D.events.filter((e) => e.upcoming).slice(0, 3).map((e) => `<div class="list-row"><div class="date-block" style="padding:.4rem .6rem"><b style="font-size:1.2rem">${new Date(e.date).getDate()}</b><span>${new Date(e.date).toLocaleString("en", { month: "short" })}</span></div><div class="grow"><b class="small">${e.title}</b><div class="small muted">${e.time}</div></div>${rsvps.includes(e.id) ? `<span class="status ok">Going</span>` : `<button class="btn btn-quiet btn-sm" data-rsvp="${e.id}">RSVP</button>`}</div>`).join("")}
-          <h3 class="mt-2">Quick actions</h3>
-          <div class="tags mt-1"><a class="btn btn-quiet btn-sm" href="#validate">Validate an idea</a><a class="btn btn-quiet btn-sm" href="#opportunities">Find internships</a><a class="btn btn-quiet btn-sm" href="#resources">Pitch deck template</a></div></div>
-      </div>`;
-    else if (dashTab === "matches") main = `<div class="card">${recBlock}</div>`;
-    else if (dashTab === "applications") main = `<div class="card"><h3>${u.role === "founder" ? "Applications to your venture" : "Your applications"}</h3>${u.role === "founder"
-      ? D.builders.slice(0, 4).map((b, i) => `<div class="list-row"><span class="avatar">${initials(b.name)}</span><div class="grow"><b>${b.name}</b><div class="small muted">${b.skills.join(" · ")}</div></div><span class="status ${i === 0 ? "new" : "review"}">${i === 0 ? "New" : "To review"}</span><button class="btn btn-ghost btn-sm" data-connect="${b.name}">Review</button></div>`).join("")
-      : appsBlock}</div>`;
-    else if (dashTab === "events") main = `<div class="grid">${evBlock}</div>`;
-    else main = `<div class="card"><div style="display:flex;gap:1.2rem;align-items:center"><span class="avatar avatar-lg">${initials(u.name)}</span><div><h3 style="margin:0">${esc(u.name)}</h3><div class="muted small">${esc(u.year || "Add your year & branch")} · <span class="gold">${u.role}</span></div><p class="mt-1">${esc(u.bio || "No bio yet.")}</p></div></div>
-      <div class="mt-2"><div class="needs small muted">Skills / needs</div><div class="tags mt-1">${[...(u.skills || []), ...(u.needs || [])].map((s) => `<span class="tag">${s}</span>`).join("") || '<span class="muted small">None yet</span>'}</div></div>
-      <div class="mt-2"><div class="needs small muted">Domains</div><div class="tags mt-1">${(u.domains || []).map((s) => `<span class="tag gold">${s}</span>`).join("") || '<span class="muted small">None yet</span>'}</div></div>
-      ${u.vname ? `<div class="mt-2 card" style="background:var(--bg-2)"><span class="tag gold">Your venture</span><h3 class="mt-1">${esc(u.vname)}</h3><p class="muted">${esc(u.vpitch || "")}</p></div>` : ""}
-      <div class="tags mt-2"><a href="javascript:void 0" data-obmode="manual" class="btn btn-ghost">Edit profile</a><a href="javascript:void 0" data-obmode="ai" class="btn btn-quiet">Update with my AI</a></div></div>`;
-
-    return `
-    <div class="container dash page-enter">
-      <aside class="dash-side">${side}</aside>
-      <div>
-        <div style="display:flex;justify-content:space-between;align-items:end;gap:1rem;flex-wrap:wrap;margin-bottom:2rem">
-          <div><span class="eyebrow">Dashboard</span><h2 class="mt-1">Hey ${esc(u.name.split(" ")[0])} <span class="script gold" style="font-size:2rem">let's build.</span></h2></div>
-          ${u.role === "founder" ? `<a href="#matchmaking" class="btn btn-primary">View my listing →</a>` : `<a href="#matchmaking" class="btn btn-primary">Find ventures →</a>`}
-        </div>
-        ${main}
-      </div>
+      <p class="error mt-2" id="icErr"></p>
+      <button class="btn btn-primary btn-lg mt-2">Get my score</button>
+    </form>
+    <div id="icResult"></div>
+  </div></section>`;
+};
+function ideaResult(idea, ans) {
+  const score = ideaScore(ans);
+  const weak = QUESTIONS.filter(([k]) => ans[k] < 2);
+  const verdict = score >= 75 ? ["Strong signal", "You've done real homework. Find a team and build an MVP."]
+    : score >= 45 ? ["Promising, with gaps", "There's something here. Close the gaps below before writing code."]
+    : ["Still an assumption", "That's normal at the start. Go and talk to people who have this problem."];
+  const tips = { problem: "Write the problem without your solution in it.", who: "Narrow it to one specific group you can reach this week.", talked: "Do 10 problem interviews. Read The Mom Test first.", pain: "Look for people already hacking together workarounds.", alt: "List five alternatives, including doing nothing.", pay: "Try a landing page, a waitlist or pre-orders.", why: "Write down your unfair advantage, then test it." };
+  return `
+    <div class="panel mt-4 fade">
+      <div class="row" style="gap:2rem;align-items:flex-end"><div class="score">${score}</div><div><span class="label gold">${verdict[0]}</span><h3 class="mt-1">“${esc(idea)}”</h3><p class="small mt-1">${verdict[1]}</p></div></div>
+      ${weak.length ? `<h3 class="mt-4">What to do next</h3><ul class="mt-1" style="margin-left:1.1rem;color:var(--text-2)">${weak.map(([k]) => `<li>${tips[k]}</li>`).join("")}</ul>` : ""}
+      <div class="row mt-4">${S.settings.vistadexUrl ? `<a href="${esc(S.settings.vistadexUrl)}" target="_blank" rel="noopener" class="btn btn-primary">Go deeper on VistaDex ↗</a>` : ""}<a href="#join" class="btn">Find co-founders</a><a href="#events" class="arrow-link">Pitch it at an event</a></div>
     </div>`;
-  };
+}
 
-  /* ---------- MATCHMAKING ---------- */
-  let mm = { tab: "ventures", q: "", domain: "", skill: "" };
-  views.matchmaking = () => {
-    const list = mm.tab === "ventures"
-      ? D.ventures.filter((v) => (!mm.q || (v.name + v.pitch).toLowerCase().includes(mm.q.toLowerCase())) && (!mm.domain || v.domain === mm.domain) && (!mm.skill || v.needs.includes(mm.skill)))
-      : D.builders.filter((b) => (!mm.q || (b.name + b.looking).toLowerCase().includes(mm.q.toLowerCase())) && (!mm.domain || b.interests.includes(mm.domain)) && (!mm.skill || b.skills.includes(mm.skill)));
-    const cards = mm.tab === "ventures" ? list.map(ventureCard).join("")
-      : list.map((b) => `<article class="card hover"><div class="venture-top"><span class="avatar">${initials(b.name)}</span><div><h3 style="margin:0">${b.name}</h3><span class="small muted">${b.year}</span></div></div>
-          <p class="muted small mt-1">${b.looking}</p><div class="tags mt-1">${b.skills.map((s) => `<span class="tag gold">${s}</span>`).join("")}</div>
-          <div class="tags mt-1">${b.interests.map((s) => `<span class="tag">${s}</span>`).join("")}</div>
-          <button class="btn btn-ghost btn-sm mt-2" data-connect="${b.name}">Invite to my venture</button></article>`).join("");
-    return `
-    ${pageHead("Co-founder matchmaking", `Find <span class="gold">/</span> Match <span class="gold">/</span> Build`, "Founders post their ideas and who they need. Builders apply to the ventures they believe in. Then everyone meets at Pitch Night.",
-      `<div class="hero-cta"><a href="#signup" class="btn btn-primary" data-role-link="founder">List your idea <span class="arrow">→</span></a><a href="#signup" class="btn btn-ghost" data-role-link="builder">Create a builder profile</a></div>`)}
-    <section class="container" style="padding-bottom:100px">
-      <div class="toolbar">
-        <div class="tabs"><button data-mmtab="ventures" class="${mm.tab === "ventures" ? "on" : ""}">Ventures (${D.ventures.length})</button><button data-mmtab="builders" class="${mm.tab === "builders" ? "on" : ""}">Builders (${D.builders.length})</button></div>
-        <input class="input" id="mmQ" placeholder="Search ${mm.tab}…" value="${esc(mm.q)}"/>
-        <select class="input" id="mmDomain" style="max-width:200px"><option value="">All domains</option>${D.domains.map((d) => `<option ${mm.domain === d ? "selected" : ""}>${d}</option>`).join("")}</select>
-        <select class="input" id="mmSkill" style="max-width:200px"><option value="">${mm.tab === "ventures" ? "Any skill needed" : "Any skill"}</option>${D.skills.map((d) => `<option ${mm.skill === d ? "selected" : ""}>${d}</option>`).join("")}</select>
+/* ---------- opportunities ---------- */
+views.opportunities = async () => {
+  const all = (await db.list("opportunities")).sort((a, b) => String(a.deadline).localeCompare(String(b.deadline)));
+  S.cache.opps = all;
+  const list = all.filter((o) => S.opp === "All" || o.type === S.opp);
+  return `
+  ${pageHead("Opportunities", "Work with real startups.", "Internships, founder's office roles and projects with campus and outside startups. The fastest way to learn is to work on something real.")}
+  <section class="container" style="padding-bottom:96px">
+    <div class="toolbar"><div class="seg">${["All", ...C.OPP_TYPES].map((t) => `<button data-act="opp-type" data-type="${t}" class="${S.opp === t ? "on" : ""}">${t}</button>`).join("")}</div>
+      <span class="xs faint" style="margin-left:auto">${list.length} open</span></div>
+    <div class="list">${list.map((o) => `
+      <div class="list-row" style="grid-template-columns:2fr 1.3fr 1fr auto">
+        <div><span class="title">${esc(o.title)}</span><div class="tagline">${esc(o.org)}</div></div>
+        <div class="small muted">${dots([o.type, o.mode, o.duration])}</div>
+        <div class="small muted">${esc(o.stipend || "")}<div class="xs faint">${o.deadline ? "Apply by " + fmtDate(o.deadline, { day: "numeric", month: "short" }) : ""}</div></div>
+        ${o.url ? `<a class="btn btn-sm" href="${esc(o.url)}" target="_blank" rel="noopener">Apply ↗</a>` : `<button class="btn btn-sm" data-act="interest" data-id="${esc(o.id)}">I'm interested</button>`}
+      </div>`).join("") || `<div class="empty">Nothing open in this category right now.</div>`}</div>
+    <div class="notice mt-4"><div><h3>Hiring students?</h3><p class="small">List an internship, project or role and reach the FBC community.</p></div><button class="btn" data-act="post-opp">Post an opportunity</button></div>
+  </section>`;
+};
+
+/* ---------- events ---------- */
+views.events = async () => {
+  const events = await db.list("events");
+  S.cache.events = events;
+  const rsvps = S.user ? await db.myRsvps(S.user.uid).catch(() => []) : [];
+  return `
+  ${pageHead("Events", "Show up. Meet people. Pitch.", "Pitch nights, workshops, founder firesides and community meets. Announcements also go out on the WhatsApp community.")}
+  <section class="container section-sm">
+    <span class="label">Upcoming</span>
+    <div class="list mt-2">${upcoming(events).map((e) => eventRow(e, rsvps)).join("") || `<div class="empty">New events are announced soon.</div>`}</div>
+    <span class="label" style="display:block;margin-top:4rem">Past</span>
+    <div class="list mt-2">${past(events).map((e) => eventRow(e)).join("")}</div>
+  </section>
+  ${cta()}`;
+};
+async function eventModal(id) {
+  const e = (S.cache.events || []).find((x) => x.id === id) || await db.get("events", id);
+  if (!e) return;
+  const going = S.user ? (await db.myRsvps(S.user.uid).catch(() => [])).includes(id) : false;
+  openModal(`<span class="label">${esc(e.type)}</span><h2 id="modalTitle" class="mt-1">${esc(e.title)}</h2>
+    <p class="small mt-2">${dots([fmtDate(e.date, { weekday: "long", day: "numeric", month: "long" }), e.time, e.venue])}</p>
+    <p class="mt-3">${esc(e.desc)}</p>
+    ${isPastDate(e.date) ? `<p class="label mt-4">This event has passed</p>` : `<button class="btn btn-primary mt-4" data-act="rsvp" data-id="${esc(e.id)}">${going ? "You're going. Cancel RSVP" : "RSVP"}</button>`}`);
+}
+
+/* ---------- journal ---------- */
+views.journal = async () => {
+  const posts = (await db.list("posts")).sort(byDateDesc("date"));
+  const feat = posts.find((p) => p.featured) || posts[0];
+  const list = posts.filter((p) => (S.jcat !== "All" || p !== feat) && (S.jcat === "All" || p.cat === S.jcat));
+  return `
+  ${pageHead("Journal", "Startup stories, analysis and the newsletter.", "One company per story: why it started, the problem, the business model, the money, and the mistakes. The ones that didn't make it too.")}
+  <section class="container section-sm">
+    ${feat && S.jcat === "All" ? `<a class="post" href="#journal-${esc(feat.id)}" style="border:0;padding:0">
+      <span class="label gold">Featured · ${esc(feat.cat)}</span>
+      <h3 style="font-size:clamp(2rem,4vw,3rem);max-width:22ch">${esc(feat.title)}</h3>
+      <p class="lead">${esc(feat.excerpt)}</p><span class="xs faint">${esc(feat.author)} · ${fmtDate(feat.date)}${feat.read ? ` · ${esc(feat.read)} read` : ""}</span></a>` : ""}
+    <div class="toolbar mt-4"><div class="seg">${["All", ...C.POST_CATS].map((c) => `<button data-act="jcat" data-cat="${c}" class="${S.jcat === c ? "on" : ""}">${c}</button>`).join("")}</div></div>
+    <div class="grid g3">${list.map(postCard).join("") || `<div class="empty" style="grid-column:1/-1">No posts here yet.</div>`}</div>
+  </section>
+  <section class="section"><div class="container">${newsletter()}</div></section>`;
+};
+const newsletter = () => `
+  <div class="feature"><div><span class="label">The Builder's Brief</span><h2 class="mt-2">One startup story in your inbox, every two weeks.</h2></div>
+    <div><form data-form="subscribe" class="field"><label for="nlEmail">Email</label><div class="row"><input class="input" id="nlEmail" type="email" name="email" placeholder="you@pilani.bits-pilani.ac.in" required style="flex:1"/><button class="btn btn-primary">Subscribe</button></div><span class="hint">No spam. Unsubscribe any time.</span></form></div></div>`;
+
+views.post = async (id) => {
+  const p = await db.get("posts", id).catch(() => null);
+  if (!p || (!p.published && !S.admin)) return views.notfound();
+  return `
+  <article class="article"><div class="narrow">
+    <a href="#journal" class="link small">← Journal</a>
+    <span class="label" style="display:block;margin-top:2rem">${esc(p.cat)} · ${fmtDate(p.date)}${p.read ? ` · ${esc(p.read)} read` : ""}</span>
+    <h1>${esc(p.title)}</h1>
+    <p class="lead">${esc(p.excerpt)}</p>
+    <p class="small mt-3">By ${esc(p.author)}</p>
+    <div class="prose">${md(p.body || "")}</div>
+    <div class="mt-5">${newsletter()}</div>
+  </div></article>`;
+};
+
+/* ---------- resources ---------- */
+views.resources = async () => {
+  const res = (await db.list("resources")).sort((a, b) => (a.order || 0) - (b.order || 0));
+  return `
+  ${pageHead("Resources", "The founder's library.", "Guides, templates, books and tools picked by the Research & Knowledge team.")}
+  <section class="container section-sm">
+    ${C.SHELVES.map((sh) => { const items = res.filter((r) => r.shelf === sh); return items.length ? `
+      <div class="sec-grid" style="margin-bottom:3.5rem"><span class="label">${sh}</span>
+        <div class="list">${items.map((r) => `
+          <div class="list-row" style="grid-template-columns:1fr auto">
+            <div><span class="title">${esc(r.title)}</span>${r.featured ? ` <span class="tag gold" style="margin-left:.4rem">Featured</span>` : ""}<div class="tagline">${esc(r.desc)}</div></div>
+            ${r.url ? `<a class="arrow-link small" href="${esc(r.url)}" ${r.url.startsWith("#") ? "" : 'target="_blank" rel="noopener"'}>Open</a>` : `<span class="xs faint">Coming soon</span>`}
+          </div>`).join("")}</div></div>` : ""; }).join("")}
+  </section>`;
+};
+
+/* ---------- about (mission, roadmap, team) ---------- */
+views.about = async () => `
+  ${pageHead("About", "A community that learns by building.", "FBC is a student-run entrepreneurship community at BITS Pilani. We don't expect every member to become a founder. We want every member to understand how startups work, meet the right people, and try building something.")}
+  <section class="section first"><div class="container sec-grid">
+    <span class="label">Mission</span>
+    <div><h2>Make entrepreneurship open to every BITSian.</h2>
+      <div class="cols three mt-4">
+        <div class="col"><h3>Accessible</h3><p>Any branch, any year, with or without an idea. No selection process to get in.</p></div>
+        <div class="col"><h3>Practical</h3><p>Real problems, real startups, real feedback. Less theory, more doing.</p></div>
+        <div class="col"><h3>Collaborative</h3><p>Building a startup shouldn't be a lonely ambition. Find the people to do it with.</p></div>
+      </div></div>
+  </div></section>
+  <section class="section"><div class="container sec-grid">
+    <span class="label">Roadmap</span>
+    <div><h2>Where we've been, where we're going.</h2>
+      <div class="timeline mt-4">${C.ROADMAP.map((r) => `
+        <div class="tl ${r.status}"><span class="label">${r.phase} · ${r.when}${r.status === "now" ? " · In progress" : ""}</span><h3>${r.title}</h3><ul>${r.items.map((x) => `<li>${x}</li>`).join("")}</ul></div>`).join("")}</div></div>
+  </div></section>
+  <section class="section"><div class="container sec-grid">
+    <span class="label">Team</span>
+    <div><h2>Run by students.</h2><p class="lead mt-2">We're recruiting more core members. Write to us if you want to help build FBC.</p>
+      <div class="grid g3 mt-4">${C.TEAM.map((t) => `<div class="person">${avatar(t.name, "", "avatar-lg")}<div><h3>${esc(t.name)}</h3><p class="small">${esc(t.role)}</p></div></div>`).join("")}</div></div>
+  </div></section>
+  ${cta()}`;
+views.roadmap = views.about;
+
+/* ---------- contact ---------- */
+views.contact = async () => `
+  ${pageHead("Contact", "Write to us.", "Questions, event ideas, partnerships, speaking, or listing your startup. We read everything.")}
+  <section class="section first"><div class="container"><div class="grid g2" style="gap:4rem;align-items:start">
+    <form data-form="contact" class="grid" style="gap:1.25rem">
+      <div class="form-grid">
+        <div class="field"><label for="cName">Name</label><input class="input" id="cName" name="name" required value="${esc(S.profile?.name || S.user?.name || "")}"/></div>
+        <div class="field"><label for="cEmail">Email</label><input class="input" id="cEmail" type="email" name="email" required value="${esc(S.user?.email || "")}"/></div>
+        <div class="field full"><label for="cAs">You are</label><select class="input" id="cAs" name="extra"><option>A student</option><option>A startup or founder</option><option>A speaker or mentor</option><option>An investor</option><option>A sponsor or partner</option><option>Something else</option></select></div>
+        <div class="field full"><label for="cMsg">Message</label><textarea class="input" id="cMsg" name="body" required maxlength="4000"></textarea></div>
       </div>
-      <div class="grid g3" id="mmList">${cards || `<div class="empty" style="grid-column:1/-1">Nothing matches those filters yet.</div>`}</div>
-      <div class="card mt-3" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap">
-        <div><span class="tag gold">Pitch Night · ${fmt("2026-12-04", { day: "numeric", month: "short" })}</span><h3 class="mt-1">Explain your idea to the room</h3><p class="muted small">Every founder who lists an idea gets a slot to pitch it to the community.</p></div>
-        <a href="#events" class="btn btn-ghost">Event details →</a></div>
-    </section>`;
-  };
-
-  const ventureModal = (id) => {
-    const v = D.ventures.find((x) => x.id === id); if (!v) return;
-    const applied = store.get("applications", []).some((a) => a.id === id);
-    openModal(`
-      <div class="venture-top"><div class="v-logo" style="width:60px;height:60px;font-size:1.3rem">${v.logo}</div><div><h2 style="font-size:1.8rem">${v.name}</h2><span class="muted small">by ${v.founder} · ${v.year}</span></div></div>
-      <div class="tags mt-2"><span class="tag gold">${v.domain}</span><span class="tag">${D.stages[v.stage]}</span><span class="tag">${v.commitment}</span><span class="tag">${v.equity}</span></div>
-      <p class="mt-2" style="font-size:1.05rem">${v.pitch}</p>
-      <div class="mt-2"><div class="needs small muted" style="letter-spacing:.15em;text-transform:uppercase">Looking for</div><div class="tags mt-1">${v.needs.map((n) => `<span class="tag">${n}</span>`).join("")}</div></div>
-      <div class="mt-2" style="display:flex;justify-content:space-between;align-items:center">${stageDots(v.stage)}<span class="small muted">${v.applicants} people applied</span></div>
-      <form id="applyForm" data-id="${v.id}" class="mt-2" ${applied ? "hidden" : ""}>
-        <div class="field"><label>Why do you want to build this? What would you bring?</label><textarea class="input" required placeholder="Keep it short and honest."></textarea></div>
-        <button class="btn btn-primary btn-block mt-1">Apply to join ${v.name} →</button></form>
-      ${applied ? `<div class="card mt-2 center" style="border-color:var(--accent)"><b class="accent">✓ Applied</b><p class="small muted">The founder will reach out. Track it in your dashboard.</p></div>` : ""}`);
-  };
-
-  /* ---------- VALIDATE (VistaDex + quick idea check) ---------- */
-  const QUESTIONS = [
-    ["problem", "I can describe the problem in one sentence, without mentioning my solution."],
-    ["who", "I know exactly who has this problem (a specific group, not “everyone”)."],
-    ["talked", "I've talked to at least 10 people who have this problem."],
-    ["pain", "They're actively trying to solve it today (workarounds, spending money or time)."],
-    ["alt", "I know the existing alternatives and why they fall short."],
-    ["pay", "Someone has said they'd pay, pre-order, or sign up for this."],
-    ["why", "I know why I/we are the right people to build this, and why now."],
-  ];
-  views.validate = () => `
-    ${pageHead("Validate your idea", `Test it <span class="gold">before</span> you build it.`, "Most startups don't fail because they can't build. They fail because nobody needed what they built. Check your idea in two minutes, or go deep with VistaDex.")}
-    <section class="section-sm"><div class="container">
-      <div class="newsletter reveal" style="border-color:rgba(245,184,41,.45)">
-        <div>
-          <span class="eyebrow">Featured tool</span>
-          <h2 class="mt-1" style="font-size:clamp(2.4rem,5vw,3.6rem)">VistaDex</h2>
-          <p class="lead mt-1"><!-- TODO: replace with the official VistaDex description -->Go beyond the gut check. VistaDex helps founders validate an idea in a structured way and see where it's strong and where it's risky, before committing months to building it.</p>
-          <div class="tags mt-2"><span class="tag gold">Built by an FBC member</span><span class="tag">Free for FBC members</span><span class="tag">Idea validation</span></div>
-          <div class="hero-cta"><a href="${D.links.vistadex}" target="_blank" rel="noopener" class="btn btn-primary">Open VistaDex <span class="arrow">↗</span></a><a href="#quickcheck" class="btn btn-ghost" data-scroll="quickcheck">Try the quick check first</a></div>
-        </div>
-        <div class="grid">
-          ${[["Market & problem", "Is the problem real, and big enough?"], ["Competition", "Who else is solving this, and how you differ"], ["Risks & next steps", "What to test next, in order"]]
-            .map(([t, d], i) => `<div class="card hover res"><div class="icon-box">${[I.target, I.users, I.rocket][i]}</div><div><h3>${t}</h3><p>${d}</p></div></div>`).join("")}
-          <p class="hint">Placeholder feature list. Update it with VistaDex's real capabilities.</p>
-        </div>
+      <div><button class="btn btn-primary">Send message</button></div>
+    </form>
+    <div>
+      <div class="list">
+        <a class="list-row" style="grid-template-columns:1fr auto" href="${esc(S.settings.whatsapp)}" target="_blank" rel="noopener"><div><span class="title">WhatsApp community</span><div class="tagline">The fastest way to reach us and hear about events.</div></div><span class="go">↗</span></a>
+        <a class="list-row" style="grid-template-columns:1fr auto" href="${esc(S.settings.joinForm)}" target="_blank" rel="noopener"><div><span class="title">Join form</span><div class="tagline">Tell us what you'd like FBC to organise.</div></div><span class="go">↗</span></a>
+        ${S.settings.contactEmail ? `<div class="list-row" style="grid-template-columns:1fr"><div><span class="title">Email</span><div class="tagline">${esc(S.settings.contactEmail)}</div></div></div>` : ""}
       </div>
-    </div></section>
-
-    <section class="section-sm" id="quickcheck"><div class="narrow">
-      <span class="eyebrow">FBC quick idea check · free, no login</span>
-      <h2 class="mt-1">How validated is your idea?</h2>
-      <p class="muted mt-1">Be honest. Nobody sees this but you.</p>
-      <form id="ideaCheck" class="card mt-2" style="padding:2rem">
-        <div class="field"><label>Your idea in one line</label><input class="input" name="idea" placeholder="e.g. Battery-swap stations for campus e-scooters" required/></div>
-        ${QUESTIONS.map(([k, q], i) => `
-          <div class="list-row" style="align-items:flex-start;flex-wrap:wrap">
-            <span class="num gold" style="font-family:var(--font-display);min-width:28px">0${i + 1}</span>
-            <div class="grow" style="min-width:220px">${q}</div>
-            <div class="chip-select" data-q="${k}">${["No", "Kind of", "Yes"].map((o, j) => `<button type="button" class="chip" data-v="${j}">${o}</button>`).join("")}</div>
-          </div>`).join("")}
-        <p class="error mt-1" id="icErr"></p>
-        <button class="btn btn-primary btn-block mt-2">Get my score →</button>
-      </form>
-      <div id="icResult"></div>
-    </div></section>
-    ${ctaBand()}`;
-
-  const ideaResult = (idea, ans) => {
-    const score = Math.round((Object.values(ans).reduce((a, b) => a + b, 0) / (QUESTIONS.length * 2)) * 100);
-    const weak = QUESTIONS.filter(([k]) => ans[k] < 2);
-    const verdict = score >= 75 ? ["Strong signal", "You've done real homework. Time to find a team and build an MVP."]
-      : score >= 45 ? ["Promising, with gaps", "There's something here. Close the gaps below before writing code."]
-      : ["Still an assumption", "That's normal at the start. Go talk to people who have this problem first."];
-    const tips = { problem: "Write the problem without your solution in it.", who: "Narrow to one specific group you can reach this week.", talked: "Do 10 problem interviews. Read The Mom Test first.", pain: "Look for people already hacking together workarounds.", alt: "List 5 alternatives, including “do nothing”.", pay: "Try a landing page, waitlist or pre-order.", why: "Write down your unfair advantage, then test it." };
-    return `
-      <div class="card mt-2 page-enter" style="border-color:var(--gold)">
-        <div style="display:flex;gap:2rem;align-items:center;flex-wrap:wrap">
-          <div style="font-family:var(--font-display);font-size:4.5rem;font-weight:800;line-height:1" class="gold">${score}<span style="font-size:1.5rem">/100</span></div>
-          <div class="grow"><span class="tag gold">${verdict[0]}</span><h3 class="mt-1">“${esc(idea)}”</h3><p class="muted">${verdict[1]}</p></div>
-        </div>
-        <div class="progress mt-2"><i style="width:${score}%"></i></div>
-        ${weak.length ? `<h3 class="mt-2">What to do next</h3><ul style="margin:.6rem 0 0 1.1rem;color:var(--muted)">${weak.map(([k]) => `<li>${tips[k]}</li>`).join("")}</ul>` : ""}
-        <div class="hero-cta"><a href="${D.links.vistadex}" target="_blank" rel="noopener" class="btn btn-primary">Deep-dive on VistaDex ↗</a><a href="#signup" class="btn btn-ghost">Find co-founders on FBC</a><a href="#events" class="btn btn-quiet">Pitch it at an event</a></div>
-      </div>`;
-  };
-
-  /* ---------- OPPORTUNITIES ---------- */
-  let opp = { type: "All" };
-  views.opportunities = () => {
-    const types = ["All", "Internship", "Campus startup", "Project"];
-    const list = D.opportunities.filter((o) => opp.type === "All" || o.type === opp.type);
-    return `
-    ${pageHead("Opportunities", "Work with real startups.", "Internships, founder's office roles and projects with campus and external startups. Learn by doing.")}
-    <section class="container" style="padding-bottom:100px">
-      <div class="toolbar"><div class="tabs">${types.map((t) => `<button data-opp="${t}" class="${opp.type === t ? "on" : ""}">${t}</button>`).join("")}</div>
-        <span class="muted small" style="margin-left:auto">${list.length} open</span></div>
-      <div class="grid g2">${list.map((o) => `
-        <article class="card hover">
-          <div style="display:flex;justify-content:space-between;gap:1rem;align-items:start"><div><span class="tag gold">${o.type}</span><h3 class="mt-1">${o.title}</h3><p class="muted small">${o.org}</p></div><div class="icon-box">${I.brief}</div></div>
-          <div class="tags mt-1"><span class="tag">${o.mode}</span><span class="tag">${o.duration}</span><span class="tag">${o.stipend}</span>${o.tags.map((t) => `<span class="tag">${t}</span>`).join("")}</div>
-          <div class="venture-foot"><span>Apply by ${fmt(o.deadline, { day: "numeric", month: "short" })}</span><button class="btn btn-ghost btn-sm" data-apply-opp="${o.title}">Apply →</button></div>
-        </article>`).join("")}</div>
-      <div class="card mt-3" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap">
-        <div><h3>Are you a startup looking for student talent?</h3><p class="muted small">List an opportunity and reach the FBC community.</p></div>
-        <a href="#contact" class="btn btn-primary">Post an opportunity →</a></div>
-    </section>`;
-  };
-
-  /* ---------- EVENTS ---------- */
-  views.events = () => `
-    ${pageHead("Events by FBC", "Show up. Meet people. Pitch.", "Pitch nights, workshops, founder firesides and community meets. Updates also go out on WhatsApp.")}
-    <section class="container section-sm">
-      <h3 class="spaced gold" style="margin-bottom:1.5rem">Upcoming</h3>
-      <div class="grid">${D.events.filter((e) => e.upcoming).map(eventCard).join("")}</div>
-      <h3 class="spaced muted" style="margin:3.5rem 0 1.5rem">Past</h3>
-      <div class="grid">${D.events.filter((e) => !e.upcoming).map(eventCard).join("")}</div>
-    </section>
-    ${ctaBand()}`;
-
-  const eventModal = (id) => {
-    const e = D.events.find((x) => x.id === id); if (!e) return;
-    const going = store.get("rsvps", []).includes(id);
-    openModal(`<span class="tag gold">${e.type}</span><h2 class="mt-1" style="font-size:1.9rem">${e.title}</h2>
-      <div class="tags mt-1"><span class="tag">${fmt(e.date, { weekday: "long", day: "numeric", month: "long" })}</span>${e.time ? `<span class="tag">${e.time}</span>` : ""}<span class="tag">${e.venue}</span></div>
-      <p class="mt-2">${e.desc}</p>
-      ${e.upcoming ? `<button class="btn btn-primary btn-block mt-2" data-rsvp="${e.id}">${going ? "✓ You're going (click to cancel)" : "RSVP →"}</button>` : `<p class="muted small mt-2">This event has passed.</p>`}`);
-  };
-
-  /* ---------- JOURNAL ---------- */
-  let jcat = "All";
-  views.journal = () => {
-    const cats = ["All", "Startup Story", "Analysis", "Failure Files", "Newsletter"];
-    const feat = D.posts.find((p) => p.featured);
-    const list = D.posts.filter((p) => !p.featured && (jcat === "All" || p.cat === jcat));
-    return `
-    ${pageHead("The Journal", "Startup stories, analysis & the newsletter.", "One startup per edition: how it started, the problem, the business model, the funding journey and the failures. Successes and the ones that didn't make it.")}
-    <section class="container section-sm">
-      ${jcat === "All" && feat ? `<a href="#journal-${feat.id}" class="card post-card featured-post reveal"><div class="post-cover"><span class="big-letter">${feat.letter}</span><span class="tag gold">Featured · ${feat.cat}</span></div>
-        <div class="post-body"><h3>${feat.title}</h3><p>${feat.excerpt}</p><div class="post-meta">${feat.author} · ${fmt(feat.date)} · ${feat.read}</div><span class="btn btn-ghost btn-sm mt-1" style="align-self:start">Read story →</span></div></a>` : ""}
-      <div class="toolbar"><div class="tabs">${cats.map((c) => `<button data-jcat="${c}" class="${jcat === c ? "on" : ""}">${c}</button>`).join("")}</div></div>
-      <div class="grid g3">${list.map(postCard).join("") || `<div class="empty" style="grid-column:1/-1">No posts here yet.</div>`}</div>
-    </section>
-    <section class="container section-sm">
-      <div class="newsletter reveal"><div><span class="eyebrow">The Builder's Brief</span><h2 class="mt-1">Get one startup story in your inbox, every two weeks.</h2></div>
-        <form class="inline-form" data-subscribe><input class="input" type="email" placeholder="you@pilani.bits-pilani.ac.in" required/><button class="btn btn-primary">Subscribe</button></form></div>
-    </section>`;
-  };
-
-  views.post = (id) => {
-    const p = D.posts.find((x) => x.id === id);
-    if (!p) return views.notfound();
-    return `
-    <article class="article page-enter"><div class="narrow">
-      <a href="#journal" class="link small">← Back to Journal</a>
-      <div class="mt-2"><span class="tag gold">${p.cat}</span></div>
-      <h1>${p.title}</h1>
-      <div style="display:flex;gap:1rem;align-items:center"><span class="avatar">${initials(p.author)}</span><div class="small"><b>${p.author}</b><div class="muted">${fmt(p.date)} · ${p.read} read</div></div></div>
-      ${p.cat === "Startup Story" ? `<div class="fact-box"><div><span>Founded</span><b>20XX</b></div><div><span>Domain</span><b>—</b></div><div><span>Stage</span><b>—</b></div><div><span>Raised</span><b>—</b></div></div>` : ""}
-      <div class="article-body">
-        <p><em class="muted">Sample article. The Research &amp; Knowledge team will publish the real content here.</em></p>
-        <p>${p.excerpt} This layout follows the structure from our publication plan: why the startup was founded, the problem, the founding team, the business model, competition, the funding journey, and the failures and decisions that shaped it.</p>
-        <h2>The problem</h2><p>Every story starts with a problem someone actually had. We look at how the founders spotted it and how they knew it was worth solving.</p>
-        <blockquote>“The idea matters, but execution matters most.”</blockquote>
-        <h2>Business model & market</h2><p>How the company makes money, how big the opportunity really is (TAM, SAM, SOM) and who else was competing for it.</p>
-        <h2>What went wrong, and what we can learn</h2><ul><li>The decision that almost killed the company</li><li>What they'd do differently</li><li>One takeaway for student founders</li></ul>
+      <div class="faq mt-4">
+        <span class="label">Questions</span>
+        ${[["Do I need a startup idea to join?", "No. Many members join to learn, to explore, or to join someone else's venture. You can start anywhere."],
+           ["Who can join?", "Any BITS student, from any branch or year, with any level of experience. Sign in with your BITS Google account."],
+           ["Won't someone steal my idea if I list it?", "People can only join you if they know what you're building. Ideas are cheap; execution is what counts."],
+           ["How does matchmaking work?", "Founders list their idea and who they need. Builders apply. The founder reviews applications, and everyone meets at Pitch Night."],
+           ["Is there a fee?", "No. FBC is free for students."]].map(([q, a]) => `<details><summary>${q}</summary><p>${a}</p></details>`).join("")}
       </div>
-      <div class="newsletter mt-3"><div><h3>Liked this?</h3><p class="muted small">Get the next story in your inbox.</p></div><form class="inline-form" data-subscribe><input class="input" type="email" placeholder="you@pilani.bits-pilani.ac.in" required/><button class="btn btn-primary">Subscribe</button></form></div>
-    </div></article>`;
-  };
+    </div>
+  </div></div></section>`;
 
-  /* ---------- RESOURCES ---------- */
-  views.resources = () => `
-    ${pageHead("Resources", "The founder's library.", "Guides, templates, books and tools curated by the Research & Knowledge team. Start anywhere.")}
-    <section class="container section-sm">
-      ${D.resources.map((g, gi) => `
-        <div class="reveal" style="margin-bottom:3.5rem"><h3 class="spaced gold" style="margin-bottom:1.3rem">${g.cat}</h3>
-        <div class="grid g3">${g.items.map((r) => `
-          <a href="${r.featured ? "#validate" : "javascript:void 0"}" class="card res" ${r.featured ? 'style="border-color:rgba(245,184,41,.5)"' : "data-soon"}>
-            <div class="icon-box">${[I.book, I.pen, I.bulb, I.tool][gi]}</div>
-            <div><h3>${r.t} ${r.featured ? '<span class="tag gold" style="margin-left:.3rem">Featured</span>' : ""}</h3><p>${r.d}</p></div></a>`).join("")}</div></div>`).join("")}
-    </section>`;
+views.notfound = async () => `<section class="section first"><div class="container"><span class="label">404</span><h1 class="mt-2">Not built yet.</h1><p class="lead mt-3">This page doesn't exist. Fitting, for a builders' club.</p><a href="#home" class="btn btn-primary mt-4">Back home</a></div></section>`;
 
-  /* ---------- ROADMAP ---------- */
-  views.roadmap = () => {
-    const done = D.roadmap.filter((r) => r.status === "done").length;
-    return `
-    ${pageHead("Roadmap", "Where we've been. Where we're going.", "FBC started with three people and one problem. Here's the plan to grow it into a campus-wide founder ecosystem.")}
-    <section class="container section-sm">
-      <h3 class="spaced gold">The founder journey we support</h3>
-      <div class="journey mt-2 reveal">${[["Spark", "Curiosity, a problem you can't stop thinking about"], ["Idea", "Validate it with real people"], ["Team", "Find co-founders through matchmaking"], ["Build", "Ship an MVP, learn fast"], ["Launch", "Pitch, demo day, first users"], ["Legend", "Grow, raise, give back to FBC"]]
-        .map(([t, d], i) => `<div class="journey-step"><span class="n">0${i + 1}</span><b>${t}</b><small>${d}</small></div>`).join("")}</div>
-    </section>
-    <section class="narrow section-sm">
-      <h3 class="spaced gold">The FBC roadmap</h3>
-      <div class="timeline" style="--fill:${((done + 0.5) / D.roadmap.length) * 100}%">
-        ${D.roadmap.map((r, i) => `
-          <div class="tl-item ${r.status} reveal"><div class="tl-dot">${r.status === "done" ? "✓" : i}</div>
-            <div class="card"><div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap"><span class="small muted">${r.phase} · ${r.when}</span>
-              <span class="status ${r.status === "done" ? "ok" : r.status === "now" ? "review" : ""}" ${r.status === "next" ? 'style="color:var(--muted)"' : ""}>${r.status === "done" ? "Done" : r.status === "now" ? "In progress" : "Up next"}</span></div>
-              <h3 class="mt-1">${r.title}</h3><ul>${r.items.map((x) => `<li>${x}</li>`).join("")}</ul></div></div>`).join("")}
+/* ==========================================================
+   SIGN IN / JOIN
+   ========================================================== */
+const authArt = (quote, cite) => `
+  <aside class="auth-art"><span class="label">Founders &amp; Builders Collective</span>
+    <div><blockquote>${quote}</blockquote><cite>${cite}</cite></div>
+    <img src="assets/campus.webp" alt="" aria-hidden="true"/></aside>`;
+const signInFields = () => db.mode === "demo"
+  ? `<div class="demo-note mt-3">Demo mode. Once the site is connected to Firebase this becomes a "Continue with Google" button. For now, enter any BITS email.</div>
+     <div class="field mt-3"><label for="dName">Name</label><input class="input" id="dName" name="name" placeholder="Your name"/></div>
+     <div class="field mt-2"><label for="dEmail">BITS email</label><input class="input" id="dEmail" type="email" name="email" placeholder="f2024xxxx@pilani.bits-pilani.ac.in" required/></div>
+     <button class="btn btn-primary btn-block btn-lg mt-3">Continue</button>`
+  : `<button class="btn btn-block btn-lg btn-google mt-4">${GOOGLE_ICON} Continue with Google</button>
+     <p class="hint mt-2">Use your BITS account: Pilani, Goa, Hyderabad or Dubai.</p>`;
+
+views.join = async () => {
+  if (S.user && S.profile) return redirect("dashboard");
+  const roles = [["founder", "Founder", "I have an idea and need a team"], ["builder", "Builder", "I want to join a team and build"], ["explorer", "Explorer", "I'm curious about startups"]];
+  return `
+  <section class="auth fade">
+    ${authArt("We want to learn entrepreneurship. If you're willing to join us, let's learn it together.", "FBC, first meetup")}
+    <div class="auth-main"><form class="auth-card" data-form="signin">
+      <span class="label">Join FBC</span><h2>Create your profile</h2>
+      <p class="small">Free for every BITSian. Takes about two minutes, less if your AI assistant helps.</p>
+      <div class="roles" role="radiogroup" aria-label="I'm joining as">
+        ${roles.map(([k, t, d]) => `<button type="button" class="role ${S.pendingRole === k ? "on" : ""}" data-act="pick-role" data-role="${k}" role="radio" aria-checked="${S.pendingRole === k}"><b>${t}</b><small>${d}</small><span class="radio"></span></button>`).join("")}
       </div>
-    </section>
-    ${ctaBand()}`;
-  };
+      ${signInFields()}
+      <p class="error mt-2" id="authErr"></p>
+      <p class="small mt-3">Already a member? <a class="link" href="#login">Sign in</a></p>
+    </form></div>
+  </section>`;
+};
+views.login = async () => {
+  if (S.user && S.profile) return redirect("dashboard");
+  return `
+  <section class="auth fade">
+    ${authArt("People can only join you if they know what you're building.", "A lesson from our founder")}
+    <div class="auth-main"><form class="auth-card" data-form="signin">
+      <span class="label">Welcome back</span><h2>Sign in</h2>
+      <p class="small">With your BITS Google account.</p>
+      ${signInFields()}
+      <p class="error mt-2" id="authErr"></p>
+      <p class="small mt-3">New here? <a class="link" href="#join">Join FBC</a></p>
+    </form></div>
+  </section>`;
+};
+forms.signin = async (f) => {
+  const err = $("#authErr"); err.textContent = "";
+  const btn = $("button.btn-primary, button.btn-google", f); btn.disabled = true;
+  try {
+    const opts = db.mode === "demo" ? { name: f.name?.value.trim(), email: f.email?.value.trim() } : {};
+    if (db.mode === "demo" && !isAllowedEmail(opts.email)) throw new Error("not-bits");
+    const user = await db.signIn(opts);
+    await loadUser(user);
+    if (!S.profile) {
+      S.profile = await db.saveProfile(user.uid, { name: user.name, role: S.pendingRole || "builder", photo: user.photo || "" });
+      S.draft = null; S.ob = { step: 0, mode: null };
+      toast("Welcome to FBC. Let's set up your profile.");
+      go("onboarding");
+    } else { toast(`Welcome back, ${String(S.profile.name).split(" ")[0]}`); go("dashboard"); }
+  } catch (e) {
+    console.error(e);
+    err.textContent = e.message === "not-bits" ? "Please use your BITS email address." : e.code === "auth/popup-closed-by-user" ? "Sign-in was cancelled." : e.code === "auth/popup-blocked" ? "Your browser blocked the sign-in window. Allow pop-ups for this site and try again." : "Couldn't sign you in. Please try again.";
+  } finally { btn.disabled = false; }
+};
 
-  /* ---------- CONTACT ---------- */
-  views.contact = () => `
-    ${pageHead("Contact", "Let's talk.", "Questions, ideas for events, want to partner, speak, or list your startup? Reach out.")}
-    <section class="container section-sm"><div class="grid g2" style="gap:3rem;align-items:start">
-      <form class="card" id="contactForm" style="padding:2rem">
-        <div class="form-grid">
-          <div class="field"><label>Name</label><input class="input" required/></div>
-          <div class="field"><label>Email</label><input class="input" type="email" required/></div>
-          <div class="field full"><label>I'm reaching out as…</label><select class="input"><option>Student</option><option>Startup / founder</option><option>Speaker / mentor</option><option>Investor</option><option>Sponsor / partner</option><option>Other</option></select></div>
-          <div class="field full"><label>Message</label><textarea class="input" required placeholder="How can we help?"></textarea></div>
-        </div>
-        <button class="btn btn-primary btn-block mt-2">Send message →</button>
-      </form>
+/* ==========================================================
+   ONBOARDING (manual or AI-assisted)
+   ========================================================== */
+const stepLabels = (u) => (isFounder(u) ? ["About you", "Your venture", "Who you need"] : ["About you", "Skills", "Interests"]);
+function stepBody(s, u) {
+  const founder = isFounder(u);
+  const chips = (list, key) => `<div class="chips" data-chips="${key}">${list.map((x) => `<button type="button" class="chip ${(u[key] || []).includes(x) ? "on" : ""}" data-act="chip">${x}</button>`).join("")}</div>`;
+  const opts = (list, val) => `<option value="" ${val ? "" : "selected"} disabled>Choose</option>` + list.map((o) => `<option ${val === o ? "selected" : ""}>${o}</option>`).join("");
+  if (s === 0) return `
+    <div class="form-grid">
+      <div class="field"><label>Full name</label><input class="input" name="name" value="${esc(u.name || "")}" required maxlength="80"/></div>
+      <div class="field"><label>Year and branch</label><input class="input" name="year" value="${esc(u.year || "")}" placeholder="2nd year, CS" maxlength="60"/></div>
+      <div class="field full"><label>One-line bio</label><input class="input" name="bio" value="${esc(u.bio || "")}" placeholder="What drives you?" maxlength="160"/></div>
+      <div class="field"><label>LinkedIn</label><input class="input" name="linkedin" value="${esc(u.linkedin || "")}" placeholder="linkedin.com/in/…" maxlength="200"/></div>
+      <div class="field"><label>Availability</label><select class="input" name="avail">${opts(C.AVAIL, u.avail)}</select></div>
+    </div>`;
+  if (s === 1 && founder) return `
+    <div class="form-grid">
+      <div class="field"><label>Venture name</label><input class="input" name="vname" value="${esc(u.vname || "")}" placeholder="A working name is fine" maxlength="60"/></div>
+      <div class="field"><label>Stage</label><select class="input" name="vstage">${C.STAGES.map((o, i) => `<option value="${i}" ${+u.vstage === i ? "selected" : ""}>${o}</option>`).join("")}</select></div>
+      <div class="field full"><label>The problem you're solving</label><textarea class="input" name="vproblem" placeholder="Who has this problem, and how do they deal with it today?" maxlength="600">${esc(u.vproblem || "")}</textarea></div>
+      <div class="field full"><label>One-line pitch</label><input class="input" name="vpitch" value="${esc(u.vpitch || "")}" placeholder="We help ___ do ___ by ___" maxlength="200"/></div>
+      <div class="field full"><span class="field-label">Domain</span>${chips(C.DOMAINS, "domains")}</div>
+    </div>`;
+  if (s === 1) return `<div class="field"><span class="field-label">What can you bring to a team?</span>${chips(C.SKILLS, "skills")}</div>
+    <div class="field mt-3"><label>Anything you've built or worked on?</label><textarea class="input" name="work" placeholder="Projects, internships, links" maxlength="600">${esc(u.work || "")}</textarea></div>`;
+  if (s === 2 && founder) return `<div class="field"><span class="field-label">Skills you're looking for in a co-founder</span>${chips(C.SKILLS, "needs")}</div>
+    <div class="form-grid mt-3"><div class="field"><label>Expected commitment</label><input class="input" name="commit" value="${esc(u.commit || "")}" placeholder="10–15 hrs/week" maxlength="60"/></div>
+    <div class="field"><label>Equity or compensation</label><select class="input" name="equity">${opts(C.EQUITY, u.equity)}</select></div>
+    <label class="check full"><input type="checkbox" name="pitchnight" ${u.pitchnight ? "checked" : ""}/> I'd like to pitch at the next Pitch Night</label></div>`;
+  return `<div class="field"><span class="field-label">Domains that interest you</span>${chips(C.DOMAINS, "domains")}</div>
+    <div class="field mt-3"><label>What are you looking for?</label><select class="input" name="looking">${opts(C.LOOKING, u.looking)}</select></div>`;
+}
+function readForm(f, target) {
+  $$("input, select, textarea", f).forEach((el) => { if (!el.name) return; target[el.name] = el.type === "checkbox" ? el.checked : el.value; });
+  $$("[data-chips]", f).forEach((g) => (target[g.dataset.chips] = $$(".chip.on", g).map((c) => c.textContent)));
+  return target;
+}
+
+views.onboarding = async () => {
+  if (!S.user) return redirect("join");
+  S.draft ||= { ...S.profile };
+  const u = S.draft, founder = isFounder(u), labels = stepLabels(u), ob = S.ob;
+  const head = (sub, title, lead = "") => `<span class="label">Profile setup · ${roleName(u)}${sub ? " · " + sub : ""}</span><h2 class="mt-2">${title}</h2>${lead ? `<p class="mt-2">${lead}</p>` : ""}`;
+  const wrap = (inner) => `<section class="section-sm fade"><div class="narrow">${inner}</div></section>`;
+
+  if (!ob.mode) return wrap(`
+    ${head("", "How do you want to set up your profile?", founder ? "We'll need your venture, the problem you're solving, and who you're looking for." : "We'll need your skills, your interests, and what you're looking for.")}
+    <div class="choice mt-4">
+      <button class="choice-opt rec" data-act="ob-mode" data-mode="ai"><span class="label gold">Recommended · About 2 minutes</span><h3>Use your AI assistant</h3>
+        <p>Your chatbot already knows ${founder ? "your project" : "you"}. Copy our prompt into ChatGPT, Claude, Gemini or any assistant, then paste its reply back. You check everything before it's saved.</p><span class="arrow-link small mt-1">Use my AI</span></button>
+      <button class="choice-opt" data-act="ob-mode" data-mode="manual"><span class="label">About 5 minutes</span><h3>Fill it in yourself</h3>
+        <p>Three short steps: ${labels.join(", ").toLowerCase()}.</p><span class="arrow-link small mt-1">Fill it in</span></button>
+    </div>
+    <p class="small mt-4"><a href="#dashboard" class="link">Skip for now</a></p>`);
+
+  if (ob.mode === "ai") return wrap(`
+    ${head("With your AI", "Let your AI do the paperwork.", "Copy the prompt into the chatbot you use most, then paste its reply below.")}
+    <div class="mt-4" style="display:grid;gap:2.5rem">
+      <div><div class="row" style="align-items:baseline;gap:1rem;flex-wrap:nowrap"><span class="step-num">1</span><div><h3>Copy this prompt</h3><p class="small">Works with ChatGPT, Claude, Gemini, Copilot and others. Best in the chat where you've talked about ${founder ? "your idea" : "your work"}.</p></div></div>
+        <textarea class="input prompt-box mt-2" id="aiPrompt" readonly aria-label="Prompt">${esc(aiPrompt(u))}</textarea>
+        <div class="row mt-2"><button type="button" class="btn btn-primary btn-sm" data-act="copy-prompt">Copy prompt</button><span class="hint">AI doesn't know you yet? It will ask you a few questions instead.</span></div></div>
+      <form data-form="ai-import"><div class="row" style="align-items:baseline;gap:1rem;flex-wrap:nowrap"><span class="step-num">2</span><div><h3>Paste the reply</h3><p class="small">Paste the whole reply. Text around the code block is fine.</p></div></div>
+        <textarea class="input mt-2" name="reply" aria-label="AI reply" style="min-height:180px;font-family:var(--mono);font-size:.8rem" placeholder="Paste here"></textarea>
+        <p class="error mt-1" id="aiErr"></p>
+        <div class="row mt-1"><button class="btn btn-primary">Import and review</button><button type="button" class="btn btn-sm" data-act="ai-sample">Try a sample reply</button></div></form>
+      <p class="hint">The reply is read here, in your browser. Nothing is saved until you review it and press save. Remove anything you don't want other members to see.</p>
+    </div>
+    <p class="small mt-4"><button class="link" data-act="ob-mode" data-mode="">Back</button> · <button class="link" data-act="ob-mode" data-mode="manual">Fill it in yourself instead</button></p>`);
+
+  if (ob.mode === "review") {
+    const blank = u._blank || [], unmatched = u._unmatched || [];
+    return wrap(`
+      ${head("Review", "Check what your AI filled in.", `Fields marked <span class="ai-badge">AI</span> came from your chatbot. Fix anything that's wrong, or that you don't want public.`)}
+      <div class="panel flat mt-3"><p class="small"><b style="color:var(--text)">${(u._ai || []).length} fields filled.</b> ${blank.length ? `Still empty: ${blank.map((k) => FIELD_LABEL[k] || k).join(", ")}.` : "Nothing left empty."}</p>
+        ${unmatched.length ? `<p class="small mt-1">Your AI also said ${unmatched.map((x) => `“${esc(x)}”`).join(", ")}, which didn't match our lists. Pick the closest option below if it applies.</p>` : ""}</div>
+      <form data-form="onboarding" data-review="1" class="mt-4">
+        ${[0, 1, 2].map((s) => `<div class="label review-h">${labels[s]}</div>${stepBody(s, u)}`).join("")}
+        <div class="spread mt-4"><button type="button" class="btn" data-act="ob-mode" data-mode="ai">Paste a different reply</button><button class="btn btn-primary">Save profile</button></div>
+      </form>`);
+  }
+
+  const s = ob.step;
+  return wrap(`
+    ${head("", ["Tell us about you", founder ? "What are you building?" : "What do you bring?", founder ? "Who do you need?" : "What interests you?"][s])}
+    <div class="steps">${labels.map((l, i) => `<div class="${i < s ? "done" : i === s ? "cur" : ""}">${l}</div>`).join("")}</div>
+    <form data-form="onboarding">${stepBody(s, u)}
+      <div class="spread mt-4">${s > 0 ? `<button type="button" class="btn" data-act="ob-back">Back</button>` : `<button type="button" class="btn" data-act="ob-mode" data-mode="">Back</button>`}
+        <button class="btn btn-primary">${s === 2 ? "Save profile" : "Continue"}</button></div>
+    </form>
+    <p class="small mt-4"><button class="link" data-act="ob-mode" data-mode="ai">Use my AI instead</button></p>`);
+};
+forms["ai-import"] = (f) => {
+  const err = $("#aiErr"); const text = f.reply.value.trim();
+  if (!text) return (err.textContent = "Paste your AI's reply first.");
+  try {
+    const r = parseAiReply(text, S.draft);
+    Object.assign(S.draft, r.out, { _ai: r.ai, _blank: r.blank, _unmatched: r.unmatched });
+    S.ob.mode = "review"; render(); scrollTo(0, 0);
+    toast(`Imported ${r.ai.length} fields. Check them before saving.`);
+  } catch (e) {
+    err.textContent = e.message === "empty"
+      ? "We found the reply but couldn't read any profile fields. Make sure you copied the whole code block."
+      : "We couldn't find the profile in that reply. Ask your AI to “reply with only the JSON in a code block”, then paste again.";
+  }
+};
+forms.onboarding = async (f) => {
+  readForm(f, S.draft);
+  if (!f.dataset.review && S.ob.step < 2) { S.ob.step++; render(); scrollTo(0, 0); return; }
+  const btn = $("button.btn-primary", f); btn.disabled = true;
+  try {
+    const clean = { ...S.draft }; delete clean._ai; delete clean._blank; delete clean._unmatched;
+    S.profile = await db.saveProfile(S.user.uid, clean);
+    S.draft = null; S.ob = { step: 0, mode: null }; S.dashTab = "overview";
+    toast("Profile saved"); go("dashboard");
+  } catch (e) { console.error(e); toast("Couldn't save. Check your connection and try again."); btn.disabled = false; }
+};
+
+/* ==========================================================
+   DASHBOARD: the member's own page
+   ========================================================== */
+const APP_STATES = ["new", "reviewing", "accepted", "declined"];
+views.dashboard = async () => {
+  if (!S.user) return redirect("login");
+  if (!S.profile) return redirect("join");
+  const u = S.profile, founder = isFounder(u), uid = S.user.uid;
+  const [rsvps, sent, received, venture, ventures, builders, checks, events] = await Promise.all([
+    db.myRsvps(uid).catch(() => []),
+    db.myApplications(uid).catch(() => []),
+    founder ? db.applicationsToMe(uid).catch(() => []) : [],
+    founder ? db.myVenture(uid).catch(() => null) : null,
+    founder ? [] : db.list("ventures").catch(() => []),
+    founder ? db.members("builder").catch(() => []) : [],
+    db.myIdeaChecks(uid).catch(() => []),
+    db.list("events").catch(() => []),
+  ]);
+  const myEvents = events.filter((e) => rsvps.includes(e.id)).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const nextEvent = myEvents.find((e) => !isPastDate(e.date));
+
+  // profile completeness
+  const fields = ["name", "year", "bio", "linkedin", "avail", founder ? "vpitch" : "work"];
+  const listOk = founder ? (u.needs || []).length : (u.skills || []).length;
+  const missing = fields.filter((k) => !u[k]).map((k) => FIELD_LABEL[k === "vpitch" ? "vpitch" : k] || k);
+  const pct = Math.round(((fields.length - missing.length + (listOk ? 1 : 0) + ((u.domains || []).length ? 1 : 0)) / (fields.length + 2)) * 100);
+
+  // founder: application breakdown and team coverage
+  const count = (arr, s) => arr.filter((a) => a.status === s).length;
+  const team = received.filter((a) => a.status === "accepted");
+  const covered = new Set(team.flatMap((a) => a.applicantSkills || []));
+  const needs = venture?.needs || u.needs || [];
+  const stillOpen = needs.filter((n) => !covered.has(n));
+
+  // builder: matches and teams
+  const mine = new Set([...(u.skills || []), ...(u.needs || [])]);
+  const matches = founder
+    ? builders.filter((b) => b.id !== uid).map((b) => ({ ...b, score: Math.min(98, 50 + (b.skills || []).filter((s) => needs.includes(s)).length * 18 + (b.domains || []).filter((d) => (u.domains || []).includes(d)).length * 8) })).sort((a, b) => b.score - a.score).slice(0, 6)
+    : ventures.filter((v) => v.founderUid !== uid).map((v) => ({ ...v, score: Math.min(98, 50 + (v.needs || []).filter((n) => (u.skills || []).includes(n)).length * 15 + ((v.domains || []).some((d) => (u.domains || []).includes(d)) ? 15 : 0)) })).sort((a, b) => b.score - a.score).slice(0, 6);
+  const myTeams = sent.filter((a) => a.status === "accepted");
+
+  // activity feed
+  const activity = [
+    ...received.map((a) => ({ when: a.createdAt, text: `<b>${esc(a.applicantName)}</b> applied to ${esc(a.ventureName)}` })),
+    ...received.filter((a) => a.updatedAt && a.status !== "new").map((a) => ({ when: a.updatedAt, text: `You marked ${esc(a.applicantName)} as ${statusLabel(a.status).toLowerCase()}` })),
+    ...sent.map((a) => ({ when: a.createdAt, text: `You applied to <b>${esc(a.ventureName)}</b>` })),
+    ...sent.filter((a) => a.updatedAt && a.status !== "new").map((a) => ({ when: a.updatedAt, text: `${esc(a.ventureName)} marked your application <b>${statusLabel(a.status).toLowerCase()}</b>` })),
+    ...checks.map((c) => ({ when: c.createdAt, text: `Idea check: “${esc(c.idea)}” scored ${ideaScore(c.answers)}` })),
+    ...(venture ? [{ when: venture.createdAt, text: `You listed <b>${esc(venture.name)}</b>` }] : []),
+    { when: u.createdAt, text: "You joined FBC" },
+  ].filter((a) => a.when).sort((a, b) => String(b.when).localeCompare(String(a.when))).slice(0, 8);
+
+  const tab = S.dashTab;
+  const tabs = founder
+    ? [["overview", "Overview"], ["venture", "My venture"], ["applications", "Applicants", count(received, "new") || received.length], ["matches", "Builders for you"], ["events", "My events", rsvps.length], ["ideas", "Idea checks", checks.length], ["profile", "My profile"]]
+    : [["overview", "Overview"], ["applications", "Applications", sent.length], ["teams", "My teams", myTeams.length], ["matches", "Ventures for you"], ["events", "My events", rsvps.length], ["ideas", "Idea checks", checks.length], ["profile", "My profile"]];
+
+  /* --- pieces --- */
+  const breakdown = (arr) => `<div class="stats" style="grid-template-columns:repeat(4,1fr)">${APP_STATES.map((s) => `<div class="stat"><span class="label">${statusLabel(s)}</span><b>${count(arr, s)}</b></div>`).join("")}</div>`;
+  const matchList = matches.length ? `<div class="list">${matches.map((m) => founder
+    ? `<div class="list-row" style="grid-template-columns:auto 1fr auto auto">${avatar(m.name, m.photo)}<div><span class="title">${esc(m.name)}</span> <span class="xs faint">${esc(m.year || "")}</span><div class="tagline">${(m.skills || []).map((s) => needs.includes(s) ? `<span class="gold">${esc(s)}</span>` : esc(s)).join(", ")}</div></div><span class="match">${m.score}%</span><button class="btn btn-sm" data-act="invite" data-name="${esc(m.name)}" data-email="${esc(m.email || "")}">Invite</button></div>`
+    : `<button class="list-row" style="grid-template-columns:1fr auto auto" data-act="venture" data-id="${esc(m.id)}"><div><span class="title">${esc(m.name)}</span><div class="tagline">Needs ${(m.needs || []).map((s) => mine.has(s) ? `<span class="gold">${esc(s)}</span>` : esc(s)).join(", ")}</div></div><span class="match">${m.score}%</span><span class="go">→</span></button>`).join("")}</div>
+    <p class="hint mt-2">Match % is based on overlapping skills and domains. <span class="gold">Gold</span> means a skill you ${founder ? "need" : "have"}.</p>`
+    : `<div class="empty">${founder ? "No builder profiles yet. Share FBC with friends who build." : "No ventures listed yet."}</div>`;
+
+  const receivedList = (filter) => {
+    const rows = received.filter((a) => !filter || a.status === filter).sort(byDateDesc("createdAt"));
+    return rows.length ? `<div class="list">${rows.map((a) => `
+      <div class="list-row" style="grid-template-columns:auto 1fr auto">${avatar(a.applicantName)}<div><span class="title">${esc(a.applicantName)}</span> <span class="xs faint">${esc(a.applicantYear || "")} · ${fmtDate(a.createdAt)}</span>
+        <div class="tagline">${esc((a.applicantSkills || []).join(", "))}</div><p class="small mt-1" style="color:var(--text)">${esc(a.message)}</p>
+        <p class="xs mt-1"><button class="link" data-act="copy-text" data-text="${esc(a.applicantEmail)}">${esc(a.applicantEmail)}</button></p></div>
+        <select class="input" style="width:auto;height:32px" data-act-change="app-status" data-id="${esc(a.id)}" aria-label="Status">${APP_STATES.map((s) => `<option value="${s}" ${a.status === s ? "selected" : ""}>${statusLabel(s)}</option>`).join("")}</select></div>`).join("")}</div>`
+      : `<div class="empty">${filter ? "None here." : `No applications yet. They'll appear here when builders apply to ${esc(venture?.name || u.vname || "your venture")}.`}</div>`;
+  };
+  const sentList = (rows) => rows.length ? `<div class="list">${rows.sort(byDateDesc("createdAt")).map((a) => `
+      <div class="list-row" style="grid-template-columns:1fr auto auto"><div><button class="title link" style="text-decoration:none" data-act="venture" data-id="${esc(a.ventureId)}">${esc(a.ventureName)}</button><div class="tagline">Applied ${fmtDate(a.createdAt)}${a.updatedAt && a.status !== "new" ? ` · updated ${fmtDate(a.updatedAt)}` : ""}</div></div>
+        <span class="status ${a.status}">${statusLabel(a.status)}</span>${a.status === "accepted" ? `<span></span>` : `<button class="icon-btn" data-act="withdraw" data-id="${esc(a.id)}">Withdraw</button>`}</div>`).join("")}</div>`
+    : `<div class="empty">You haven't applied anywhere yet. <a class="link" href="#matchmaking">Browse ventures</a></div>`;
+
+  const publicPreview = `
+    <div class="panel">
+      <span class="label">How other members see you</span>
+      <div class="row mt-2" style="gap:1rem">${avatar(u.name, u.photo, "avatar-lg")}<div><h3 style="font-size:1.2rem">${esc(u.name)}</h3><p class="small">${esc(u.year || "")}${u.year ? " · " : ""}${roleName(u)}</p></div></div>
+      <p class="mt-2" style="color:var(--text)">${esc(u.bio || "No bio yet.")}</p>
+      <p class="small mt-2">${esc(((founder ? u.needs : u.skills) || []).join(", "))}</p>
+    </div>`;
+
+  let main;
+  if (tab === "overview") main = founder ? `
+    <div class="stats">
+      <div class="stat"><span class="label">Listing</span><b style="font-size:1.8rem">${venture ? statusLabel(venture.status) : "Not listed"}</b><p class="xs mt-1">${venture ? `${stageBar(venture.stage)}${esc(C.STAGES[venture.stage])}` : ""}</p></div>
+      <div class="stat"><span class="label">Applicants</span><b>${received.length}</b><p class="xs mt-1">${count(received, "new")} new to review</p></div>
+      <div class="stat"><span class="label">Team</span><b>${team.length + 1}</b><p class="xs mt-1">You${team.length ? ` + ${team.length} accepted` : ""}</p></div>
+      <div class="stat"><span class="label">Profile</span><b>${pct}%</b><div class="progress"><i style="width:${pct}%"></i></div></div>
+    </div>
+    ${!venture ? `<div class="notice mt-3"><div><h3>List your venture</h3><p class="small">Add your venture details so builders can find and apply to it.</p></div><div class="row"><button class="btn btn-primary btn-sm" data-act="edit-profile" data-mode="ai">Use my AI</button><button class="btn btn-sm" data-act="edit-profile" data-mode="manual">Fill in myself</button></div></div>`
+      : count(received, "new") ? `<div class="notice mt-3"><div><h3>${count(received, "new")} new applicant${count(received, "new") > 1 ? "s" : ""}</h3><p class="small">Review them and mark each one, so applicants know where they stand.</p></div><button class="btn btn-primary btn-sm" data-act="dash-tab" data-tab="applications">Review</button></div>` : ""}
+    <div class="grid g2 mt-4" style="gap:3rem;align-items:start">
       <div>
-        <div class="grid g2">
-          <a href="${D.links.whatsapp}" target="_blank" rel="noopener" class="card res"><div class="icon-box">${I.users}</div><div><h3>WhatsApp community</h3><p>Fastest way to reach us and hear about events.</p></div></a>
-          <a href="${D.links.joinForm}" target="_blank" rel="noopener" class="card res"><div class="icon-box">${I.pen}</div><div><h3>Join form</h3><p>Tell us what you'd like FBC to organise.</p></div></a>
-        </div>
-        <h3 class="spaced gold mt-3" style="margin-bottom:1.2rem">Core team</h3>
-        <div class="grid g3">${D.team.map((t) => `<div class="card team-card hover"><span class="avatar avatar-lg">${t.initials}</span><b style="font-family:var(--font-display)">${t.name}</b><div class="small muted">${t.role}</div></div>`).join("")}</div>
-        <p class="small muted mt-1">More core members coming soon.</p>
+        <span class="label">Team coverage</span>
+        <table class="table mt-2"><tbody>
+          <tr><td>Covered by your team</td><td>${needs.filter((n) => covered.has(n)).map(esc).join(", ") || "Nothing yet"}</td></tr>
+          <tr><td>Still looking for</td><td>${stillOpen.length ? stillOpen.map((n) => `<span class="gold">${esc(n)}</span>`).join(", ") : "All covered"}</td></tr>
+          <tr><td>Pitch Night</td><td>${u.pitchnight ? "You've opted in" : `Not opted in. <button class="link" data-act="toggle-pitch">Opt in</button>`}</td></tr>
+          ${nextEvent ? `<tr><td>Your next event</td><td>${esc(nextEvent.title)}, ${fmtDate(nextEvent.date, { day: "numeric", month: "short" })}</td></tr>` : ""}
+        </tbody></table>
       </div>
-    </div></section>
-    <section class="narrow section-sm faq">
-      <h2 style="margin-bottom:1.5rem">FAQ</h2>
-      ${[["Do I need a startup idea to join?", "No. Many members join to learn, explore, or to join someone else's venture. You can start anywhere."],
-         ["Who can join FBC?", "Any BITS Pilani student, from any branch or year, with any level of experience."],
-         ["Won't someone steal my idea if I list it?", "People can only join you if they know what you're building. The idea matters, but execution matters most."],
-         ["How does co-founder matchmaking work?", "Founders fill in their idea and who they need, we share it with the community, builders apply, and everyone meets at Pitch Night."],
-         ["Is there a fee?", "No. FBC is free for students."]].map(([q, a]) => `<details><summary>${q}</summary><p>${a}</p></details>`).join("")}
-    </section>`;
+      <div><span class="label">Recent activity</span>
+        <div class="list mt-2">${activity.map((a) => `<div class="list-row" style="grid-template-columns:1fr auto;padding:.8rem 0"><span class="small" style="color:var(--text-2)">${a.text}</span><span class="xs faint">${fmtDate(a.when, { day: "numeric", month: "short" })}</span></div>`).join("")}</div></div>
+    </div>` : `
+    <div class="stats">
+      <div class="stat"><span class="label">Applications</span><b>${sent.length}</b><p class="xs mt-1">${count(sent, "new") + count(sent, "reviewing")} waiting</p></div>
+      <div class="stat"><span class="label">Accepted</span><b>${myTeams.length}</b><p class="xs mt-1">${myTeams.length ? esc(myTeams.map((t) => t.ventureName).join(", ")) : "No teams yet"}</p></div>
+      <div class="stat"><span class="label">Events</span><b>${rsvps.length}</b><p class="xs mt-1">${nextEvent ? `Next: ${fmtDate(nextEvent.date, { day: "numeric", month: "short" })}` : "None coming up"}</p></div>
+      <div class="stat"><span class="label">Profile</span><b>${pct}%</b><div class="progress"><i style="width:${pct}%"></i></div></div>
+    </div>
+    ${pct < 100 ? `<div class="notice mt-3"><div><h3>Finish your profile</h3><p class="small">Missing: ${esc(missing.join(", ") || "skills or domains")}. Complete profiles are matched first.</p></div><div class="row"><button class="btn btn-primary btn-sm" data-act="edit-profile" data-mode="ai">Finish with my AI</button><button class="btn btn-sm" data-act="edit-profile" data-mode="manual">Fill in myself</button></div></div>` : ""}
+    <div class="grid g2 mt-4" style="gap:3rem;align-items:start">
+      <div><div class="spread"><span class="label">Ventures that need you</span><button class="link small" data-act="dash-tab" data-tab="matches">See all</button></div><div class="mt-2">${matchList}</div></div>
+      <div><span class="label">Recent activity</span>
+        <div class="list mt-2">${activity.map((a) => `<div class="list-row" style="grid-template-columns:1fr auto;padding:.8rem 0"><span class="small" style="color:var(--text-2)">${a.text}</span><span class="xs faint">${fmtDate(a.when, { day: "numeric", month: "short" })}</span></div>`).join("")}</div></div>
+    </div>`;
+  else if (tab === "venture") main = venture ? `
+    <div class="grid g2" style="gap:3rem;align-items:start">
+      <div>
+        <span class="label">${esc((venture.domains || []).join(" · "))}</span><h2 class="mt-1">${esc(venture.name)}</h2>
+        <p class="mt-2" style="color:var(--text)">${esc(venture.pitch)}</p>${venture.problem ? `<p class="mt-2">${esc(venture.problem)}</p>` : ""}
+        <table class="table mt-3"><tbody>
+          <tr><td>Listing</td><td><span class="status ${venture.status}">${statusLabel(venture.status)}</span>${venture.status === "hidden" ? `<p class="xs mt-1">Hidden by an FBC admin. Write to us if this is a mistake.</p>` : ""}</td></tr>
+          <tr><td>Stage</td><td><select class="input" style="width:auto;height:32px" data-act-change="set-stage" aria-label="Stage">${C.STAGES.map((s, i) => `<option value="${i}" ${+venture.stage === i ? "selected" : ""}>${s}</option>`).join("")}</select></td></tr>
+          <tr><td>Looking for</td><td>${esc(needs.join(", "))}</td></tr>
+          <tr><td>Pitch Night</td><td>${u.pitchnight ? "Opted in" : "Not opted in"} · <button class="link" data-act="toggle-pitch">${u.pitchnight ? "Opt out" : "Opt in"}</button></td></tr>
+          <tr><td>Listed</td><td>${fmtDate(venture.createdAt)} · updated ${fmtDate(venture.updatedAt)}</td></tr>
+        </tbody></table>
+        <div class="row mt-3"><button class="btn btn-sm" data-act="edit-profile" data-mode="manual">Edit details</button>
+          ${venture.status === "live" ? `<button class="btn btn-sm" data-act="venture-status" data-status="paused">Pause listing</button>` : venture.status === "paused" ? `<button class="btn btn-primary btn-sm" data-act="venture-status" data-status="live">Make live again</button>` : ""}
+          <button class="btn btn-sm" data-act="venture" data-id="${esc(venture.id)}">Preview public listing</button></div>
+      </div>
+      <div>
+        <span class="label">Who responded</span>
+        <div class="mt-2">${breakdown(received)}</div>
+        <span class="label" style="display:block;margin-top:2rem">Your team</span>
+        <div class="list mt-2">
+          <div class="list-row" style="grid-template-columns:auto 1fr">${avatar(u.name, u.photo)}<div><span class="title">${esc(u.name)}</span><div class="tagline">Founder</div></div></div>
+          ${team.map((a) => `<div class="list-row" style="grid-template-columns:auto 1fr">${avatar(a.applicantName)}<div><span class="title">${esc(a.applicantName)}</span><div class="tagline">${esc((a.applicantSkills || []).join(", "))}</div></div></div>`).join("")}
+        </div>
+        <p class="small mt-2">${stillOpen.length ? `Still looking for <span class="gold">${esc(stillOpen.join(", "))}</span>.` : "Every skill you listed is covered."}</p>
+      </div>
+    </div>`
+    : `<div class="empty">Your venture isn't listed yet. <button class="link" data-act="edit-profile" data-mode="manual">Add your venture details</button></div>`;
+  else if (tab === "applications") main = founder
+    ? `${breakdown(received)}<div class="toolbar"><div class="seg">${["", ...APP_STATES].map((s) => `<button data-act="app-filter" data-f="${s}" class="${(S.appFilter || "") === s ? "on" : ""}">${s ? statusLabel(s) : "All"}</button>`).join("")}</div></div>${receivedList(S.appFilter)}`
+    : `${breakdown(sent)}<div class="mt-3">${sentList(sent)}</div>`;
+  else if (tab === "teams") main = myTeams.length ? `<div class="list">${myTeams.map((a) => `<button class="list-row" style="grid-template-columns:1fr auto" data-act="venture" data-id="${esc(a.ventureId)}"><div><span class="title">${esc(a.ventureName)}</span><div class="tagline">Accepted ${fmtDate(a.updatedAt || a.createdAt)}</div></div><span class="go">→</span></button>`).join("")}</div>`
+    : `<div class="empty">When a founder accepts your application, the team shows up here.</div>`;
+  else if (tab === "matches") main = matchList;
+  else if (tab === "events") main = myEvents.length ? `<div class="list">${myEvents.map((e) => eventRow(e, rsvps)).join("")}</div>` : `<div class="empty">You haven't RSVP'd to anything yet. <a class="link" href="#events">See events</a></div>`;
+  else if (tab === "ideas") main = checks.length ? `<div class="list">${checks.sort(byDateDesc("createdAt")).map((c) => `<div class="list-row" style="grid-template-columns:4rem 1fr auto"><span class="score" style="font-size:2rem">${ideaScore(c.answers)}</span><div><span class="title">${esc(c.idea)}</span><div class="tagline">${fmtDate(c.createdAt)}</div></div><a class="arrow-link small" href="#validate">Re-check</a></div>`).join("")}</div>`
+    : `<div class="empty">No idea checks yet. <a class="link" href="#validate">Check an idea</a></div>`;
+  else main = `
+    <div class="grid g2" style="gap:3rem;align-items:start">
+      <div>
+        <table class="table"><tbody>
+          <tr><td>Name</td><td>${esc(u.name)}</td></tr>
+          <tr><td>Email</td><td>${esc(S.user.email)}</td></tr>
+          <tr><td>Role</td><td><select class="input" style="width:auto;height:32px" data-act-change="change-role" aria-label="Role">${[["founder", "Founder"], ["builder", "Builder"], ["explorer", "Explorer"]].map(([k, t]) => `<option value="${k}" ${u.role === k ? "selected" : ""}>${t}</option>`).join("")}</select></td></tr>
+          <tr><td>Year and branch</td><td>${esc(u.year || "")}</td></tr>
+          <tr><td>${founder ? "Looking for" : "Skills"}</td><td>${esc(((founder ? u.needs : u.skills) || []).join(", ") || "None yet")}</td></tr>
+          <tr><td>Domains</td><td>${esc((u.domains || []).join(", ") || "None yet")}</td></tr>
+          <tr><td>Availability</td><td>${esc(u.avail || "")}</td></tr>
+          <tr><td>LinkedIn</td><td>${esc(u.linkedin || "")}</td></tr>
+          ${!founder ? `<tr><td>Past work</td><td>${esc(u.work || "")}</td></tr><tr><td>Looking for</td><td>${esc(u.looking || "")}</td></tr>` : ""}
+          <tr><td>Member since</td><td>${fmtDate(u.createdAt)}</td></tr>
+        </tbody></table>
+        <div class="row mt-3"><button class="btn" data-act="edit-profile" data-mode="manual">Edit profile</button><button class="btn" data-act="edit-profile" data-mode="ai">Update with my AI</button></div>
+      </div>
+      ${publicPreview}
+    </div>`;
 
-  views.notfound = () => `<section class="section center"><div class="container"><h1 class="gold">404</h1><p class="lead" style="margin:1rem auto">This page hasn't been built yet. Fitting, for a builders' club.</p><a href="#home" class="btn btn-primary mt-2">Back home</a></div></section>`;
+  return `
+  <div class="container shell fade">
+    <aside class="side" aria-label="Dashboard sections">
+      ${tabs.map(([k, l, n]) => `<button data-act="dash-tab" data-tab="${k}" class="${tab === k ? "on" : ""}">${l}${n ? `<span class="count">${n}</span>` : ""}</button>`).join("")}
+      <hr/><a href="#validate">Validate an idea</a>${S.admin ? `<a href="#admin">Admin console</a>` : ""}<button data-act="signout">Sign out</button>
+    </aside>
+    <div>
+      <div class="spread" style="margin-bottom:2rem"><div><span class="label">${roleName(u)} · Dashboard</span><h2 class="mt-1">Hello, ${esc(String(u.name).split(" ")[0])}.</h2></div>
+        <a href="#matchmaking" class="btn btn-primary">${founder ? "Browse builders" : "Find ventures"}</a></div>
+      ${main}
+    </div>
+  </div>`;
+};
 
-  /* ==========================================================
-     ROUTER
-     ========================================================== */
-  function redirect(r) { setTimeout(() => (location.hash = "#home" + r), 0); return ""; }
+/* ==========================================================
+   ACTIONS
+   ========================================================== */
+const confirmSafe = (msg) => { try { return window.confirm(msg); } catch { return true; } };
+Object.assign(actions, {
+  venture: (el) => ventureModal(el.dataset.id),
+  event: (el) => eventModal(el.dataset.id),
+  async rsvp(el, e) {
+    e.stopPropagation();
+    if (!S.user) { closeModal(); toast("Sign in to RSVP"); return go("login"); }
+    const id = el.dataset.id;
+    const going = (await db.myRsvps(S.user.uid)).includes(id);
+    await db.rsvp(id, { uid: S.user.uid, name: S.profile?.name || S.user.name, email: S.user.email }, !going);
+    toast(going ? "RSVP cancelled" : "You're on the list");
+    closeModal(); render();
+  },
+  "pick-role": (el) => { S.pendingRole = el.dataset.role; if (el.tagName !== "A") render(); },
+  "mm-tab": (el) => { S.mm.tab = el.dataset.tab; S.mm.skill = ""; render(); },
+  "opp-type": (el) => { S.opp = el.dataset.type; render(); },
+  jcat: (el) => { S.jcat = el.dataset.cat; render(); },
+  "dash-tab": (el) => { S.dashTab = el.dataset.tab; render(); scrollTo(0, 0); },
+  "app-filter": (el) => { S.appFilter = el.dataset.f; render(); },
+  scroll: (el, e) => { e.preventDefault(); document.getElementById(el.dataset.to)?.scrollIntoView({ behavior: "smooth" }); },
+  chip: (el) => { el.classList.toggle("on"); el.parentElement.classList.remove("ai-filled"); },
+  answer: (el) => { $$("button", el.parentElement).forEach((b) => b.classList.toggle("on", b === el)); },
+  "ob-mode": (el) => { S.ob = { step: 0, mode: el.dataset.mode || null }; render(); scrollTo(0, 0); },
+  "ob-back": () => { const f = $("form[data-form=onboarding]"); if (f) readForm(f, S.draft); S.ob.step--; render(); },
+  "edit-profile": (el) => { S.draft = { ...S.profile }; S.ob = { step: 0, mode: el.dataset.mode }; go("onboarding"); },
+  "copy-prompt": () => {
+    const box = $("#aiPrompt"); const ok = () => toast("Prompt copied. Paste it into your chatbot.");
+    const fallback = () => { box.focus(); box.select(); let done = false; try { done = document.execCommand("copy"); } catch {} done ? ok() : toast("Prompt selected. Press Ctrl+C (⌘C on Mac) to copy."); };
+    navigator.clipboard?.writeText ? navigator.clipboard.writeText(box.value).then(ok, fallback) : fallback();
+  },
+  "ai-sample": () => { $("form[data-form=ai-import]").reply.value = aiSample(S.draft); $("#aiErr").textContent = ""; toast("Sample pasted. Press Import and review."); },
+  async withdraw(el) { if (!confirmSafe("Withdraw this application?")) return; await db.withdrawApplication(el.dataset.id); toast("Application withdrawn"); render(); },
+  async "venture-status"(el) { await db.setVentureStatus(S.user.uid, el.dataset.status); toast(el.dataset.status === "live" ? "Your venture is live" : "Listing paused"); render(); },
+  async "toggle-pitch"() { S.profile = await db.saveProfile(S.user.uid, { ...S.profile, pitchnight: !S.profile.pitchnight }); toast(S.profile.pitchnight ? "You're on the Pitch Night list" : "Removed from Pitch Night"); render(); },
+  async signout() { await db.signOut(); toast("Signed out"); go("home"); },
+  invite(el) {
+    if (!S.user) return go("login");
+    const email = el.dataset.email;
+    openModal(`<span class="label">Invite</span><h2 id="modalTitle" class="mt-1">Invite ${esc(el.dataset.name)}</h2>
+      <p class="mt-2">Reach out directly. A short note about your venture and why you thought of them works best.</p>
+      ${email ? `<p class="mt-3 mono small" style="color:var(--text)">${esc(email)}</p><div class="row mt-3"><a class="btn btn-primary" href="mailto:${esc(email)}?subject=${encodeURIComponent("Building " + (S.profile?.vname || "a startup") + " together? (via FBC)")}">Write an email</a><button class="btn" data-act="copy-text" data-text="${esc(email)}">Copy address</button></div>` : `<p class="mt-3 small">This member hasn't shared an email address.</p>`}`);
+  },
+  "copy-text": (el) => navigator.clipboard?.writeText(el.dataset.text).then(() => toast("Copied"), () => toast("Couldn't copy")),
+  interest(el) {
+    const o = (S.cache.opps || []).find((x) => x.id === el.dataset.id);
+    openModal(`<span class="label">${esc(o?.org || "")}</span><h2 id="modalTitle" class="mt-1">${esc(o?.title || "Opportunity")}</h2>
+      <p class="mt-2">Tell us you're interested and we'll connect you with the team.</p>
+      <form data-form="interest" data-title="${esc(o?.title || "")}" class="mt-3 grid" style="gap:1rem">
+        <div class="form-grid"><div class="field"><label>Name</label><input class="input" name="name" required value="${esc(S.profile?.name || "")}"/></div><div class="field"><label>Email</label><input class="input" type="email" name="email" required value="${esc(S.user?.email || "")}"/></div></div>
+        <div class="field"><label>A line about you</label><textarea class="input" name="body" required maxlength="1000" style="min-height:90px"></textarea></div>
+        <div><button class="btn btn-primary">Send</button></div></form>`);
+  },
+  "post-opp": () => openModal(`<span class="label">For startups</span><h2 id="modalTitle" class="mt-1">Post an opportunity</h2>
+    <p class="mt-2">Tell us about the role. The FBC team reviews every listing before it goes live.</p>
+    <form data-form="post-opp" class="mt-3 grid" style="gap:1rem">
+      <div class="form-grid"><div class="field"><label>Your name</label><input class="input" name="name" required/></div><div class="field"><label>Email</label><input class="input" type="email" name="email" required/></div>
+      <div class="field full"><label>Company and role</label><input class="input" name="extra" required placeholder="Acme Labs, frontend intern"/></div>
+      <div class="field full"><label>Details</label><textarea class="input" name="body" required maxlength="4000" placeholder="What they'll do, duration, stipend, remote or on campus, how to apply"></textarea></div></div>
+      <div><button class="btn btn-primary">Submit for review</button></div></form>`),
+});
+const changeActions = {
+  async "app-status"(el) { await db.setApplicationStatus(el.dataset.id, el.value); toast(`Marked as ${statusLabel(el.value).toLowerCase()}`); },
+  async "change-role"(el) { S.profile = await db.saveProfile(S.user.uid, { ...S.profile, role: el.value }); S.dashTab = "overview"; toast(`You're now listed as ${roleName(S.profile).toLowerCase()}`); render(); },
+  async "set-stage"(el) { S.profile = await db.saveProfile(S.user.uid, { ...S.profile, vstage: +el.value }); toast(`Stage updated to ${C.STAGES[+el.value]}`); render(); },
+};
 
-  function renderNavActions() {
-    const u = user();
-    $("#navActions").innerHTML = u
-      ? `<a href="#dashboard" class="btn btn-ghost btn-sm">Dashboard</a><a href="#dashboard" title="${esc(u.name)}"><span class="avatar">${initials(u.name)}</span></a>`
-      : `<a href="#login" class="btn btn-ghost btn-sm">Log in</a><a href="#signup" class="btn btn-primary btn-sm">Join FBC</a>`;
+/* ---------- forms ---------- */
+Object.assign(forms, {
+  async apply(f) {
+    const v = (S.cache.ventures || []).find((x) => x.id === f.dataset.id) || await db.get("ventures", f.dataset.id);
+    if (!S.profile) { closeModal(); return go("join"); }
+    await db.apply(v, f.message.value.trim(), { uid: S.user.uid, email: S.user.email, ...S.profile });
+    toast(`Application sent to ${v.name}`); ventureModal(v.id);
+  },
+  async ideacheck(f) {
+    const idea = f.idea.value.trim(); const ans = {};
+    $$("[data-q]", f).forEach((g) => { const on = $("button.on", g); if (on) ans[g.dataset.q] = +on.dataset.v; });
+    if (Object.keys(ans).length < QUESTIONS.length) return ($("#icErr").textContent = "Answer all seven questions. “No” is a perfectly good answer.");
+    $("#icErr").textContent = "";
+    $("#icResult").innerHTML = ideaResult(idea, ans);
+    $("#icResult").scrollIntoView({ behavior: "smooth", block: "center" });
+    if (S.user) db.saveIdeaCheck(S.user.uid, { idea, answers: ans, score: ideaScore(ans) }).catch((e) => console.error(e));
+  },
+  async contact(f) { await sendMsg(f, "contact", "Message sent. We'll get back to you."); },
+  async subscribe(f) { await db.sendMessage({ type: "newsletter", email: f.email.value }); f.reset(); toast("You're subscribed to The Builder's Brief"); },
+  async interest(f) { await sendMsg(f, "interest", "Sent. We'll be in touch.", f.dataset.title); closeModal(); },
+  async "post-opp"(f) { await sendMsg(f, "opportunity", "Thanks. We'll review it and get back to you."); closeModal(); },
+});
+async function sendMsg(f, type, okMsg, extra) {
+  await db.sendMessage({ type, name: f.name?.value, email: f.email?.value, body: f.body?.value, extra: extra ?? f.extra?.value });
+  f.reset(); toast(okMsg);
+}
+
+/* ==========================================================
+   ROUTER
+   ========================================================== */
+let renderToken = 0;
+function go(route) { if (location.hash === "#" + route) render(); else location.hash = "#" + route; }
+function redirect(route) { setTimeout(() => go(route), 0); return ""; }
+function parseHash() {
+  const h = decodeURIComponent(location.hash.replace(/^#\/?/, ""));
+  if (h.startsWith("journal-")) return { key: "post", param: h.slice(8) };
+  return { key: h || "home", param: null };
+}
+
+async function render() {
+  const token = ++renderToken;
+  const { key, param } = parseHash();
+  const view = key === "admin" ? adminView : views[key] || views.notfound;
+  const slow = setTimeout(() => { if (token === renderToken) app.innerHTML = `<div class="loading">Loading</div>`; }, 150);
+  let html;
+  try { html = await view(param); }
+  catch (e) {
+    console.error(e);
+    html = `<section class="section first"><div class="container"><span class="label">Error</span><h2 class="mt-2">Something went wrong loading this page.</h2><p class="mt-2">${esc(e.code === "permission-denied" ? "You don't have access to this." : "Check your connection and try again.")}</p><button class="btn mt-3" onclick="location.reload()">Reload</button></div></section>`;
   }
-
-  function render() {
-    const h = location.hash.replace(/^#\/?/, "");
-    const [route, param] = h.startsWith("journal-") ? ["journal", h.slice(8)] : [h, null];
-    const key = route && views[route] ? route : route ? "notfound" : "home";
-    let html;
-    if (key === "journal" && param) html = views.post(param);
-    else html = (views[key] || views.notfound)();
-    app.innerHTML = html;
-    if (!["login", "signup", "dashboard", "onboarding"].includes(key)) app.firstElementChild?.classList.add("page-enter");
-    $$("#navLinks a").forEach((a) => a.classList.toggle("active", a.dataset.route === key));
-    $("#navLinks").classList.remove("open");
-    renderNavActions();
-    closeModal();
-    afterRender();
+  clearTimeout(slow);
+  if (token !== renderToken) return;
+  app.innerHTML = html;
+  $$("#navLinks a").forEach((a) => a.classList.toggle("active", a.dataset.route === key || (key === "post" && a.dataset.route === "journal") || (key === "roadmap" && a.dataset.route === "about")));
+  $("#navLinks").classList.remove("open"); $("#navToggle").setAttribute("aria-expanded", "false");
+  renderNav(); closeModal(); markAiFields();
+  const titles = { matchmaking: "Matchmaking", validate: "Validate", opportunities: "Opportunities", events: "Events", journal: "Journal", resources: "Resources", about: "About", contact: "Contact", join: "Join", login: "Sign in", dashboard: "Dashboard", onboarding: "Profile setup", admin: "Admin" };
+  document.title = (titles[key] ? titles[key] + " · " : "") + "FBC · Founders and Builders Collective";
+}
+function markAiFields() {
+  const rf = $("form[data-review]");
+  if (!rf) return;
+  (S.draft?._ai || []).forEach((n) => {
+    const el = $(`[name="${n}"], [data-chips="${n}"]`, rf); if (!el) return;
+    el.classList.add("ai-filled");
+    el.closest(".field")?.querySelector("label, .field-label")?.insertAdjacentHTML("beforeend", '<span class="ai-badge">AI</span>');
+  });
+}
+function renderNav() {
+  $("#navActions").innerHTML = S.user
+    ? `${S.admin ? `<a href="#admin" class="text-link">Admin</a>` : ""}<a href="#dashboard" class="text-link">Dashboard</a><a href="#dashboard" title="${esc(S.profile?.name || S.user.name)}">${avatar(S.profile?.name || S.user.name, S.profile?.photo || S.user.photo)}</a>`
+    : `<a href="#login" class="text-link">Sign in</a><a href="#join" class="btn btn-primary btn-sm">Join FBC</a>`;
+}
+function applySettings() {
+  const s = S.settings;
+  const a = $("#announce");
+  if (s.announcement) { a.innerHTML = md(s.announcement).replace(/^<p>|<\/p>$/g, ""); a.hidden = false; } else a.hidden = true;
+  $$("[data-link]").forEach((el) => { const v = s[el.dataset.link]; if (v) el.href = v; });
+  $("#modeNote").textContent = db.mode === "demo" ? "Demo mode: data is saved only in this browser." : "";
+}
+async function loadUser(user) {
+  if (user?.uid !== S.user?.uid) { // different person: reset per-user screen state
+    Object.assign(S, { dashTab: "overview", adminTab: "overview", appFilter: "", draft: null, ob: { step: 0, mode: null }, cache: {} });
   }
+  S.user = user;
+  S.profile = user ? await db.getProfile(user.uid).catch(() => null) : null;
+  S.admin = user ? await db.isAdmin(user.email) : false;
+}
 
-  function afterRender() {
-    // highlight AI-filled fields on the review screen
-    const rf = $("#obForm[data-review]");
-    if (rf) (user()?._ai || []).forEach((n) => {
-      const el = $(`[name="${n}"], [data-chips="${n}"]`, rf); if (!el) return;
-      el.classList.add("ai-filled");
-      el.closest(".field")?.querySelector("label")?.insertAdjacentHTML("beforeend", ' <span class="ai-badge">AI</span>');
-    });
-    // reveal on scroll
-    const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { threshold: 0.12 });
-    $$(".reveal").forEach((el) => io.observe(el));
-    // count-up
-    $$("[data-count]").forEach((el) => {
-      const end = +el.dataset.count; const t0 = performance.now();
-      const tick = (t) => { const p = Math.min((t - t0) / 1400, 1); el.textContent = Math.round(end * (1 - Math.pow(1 - p, 3))).toLocaleString("en-IN") + (end >= 1000 && p === 1 ? "+" : ""); if (p < 1) requestAnimationFrame(tick); };
-      requestAnimationFrame(tick);
-    });
-  }
+/* ---------- global listeners ---------- */
+const errMsg = (er) => (er?.code === "permission-denied" ? "You don't have permission to do that." : "Something went wrong. Please try again.");
+document.addEventListener("click", async (e) => {
+  if (e.target.closest("[data-close]")) closeModal();
+  if (e.target.closest("#navToggle")) { const open = $("#navLinks").classList.toggle("open"); $("#navToggle").setAttribute("aria-expanded", open); return; }
+  const el = e.target.closest("[data-act]");
+  if (!el) return;
+  const fn = actions[el.dataset.act] || adminActions[el.dataset.act];
+  if (fn) { try { await fn(el, e); } catch (er) { console.error(er); toast(errMsg(er)); } }
+});
+document.addEventListener("change", async (e) => {
+  const el = e.target;
+  el.classList?.remove("ai-filled");
+  if (el.id === "mmDomain") { S.mm.domain = el.value; $("#mmList").innerHTML = mmList(); }
+  if (el.id === "mmSkill") { S.mm.skill = el.value; $("#mmList").innerHTML = mmList(); }
+  const fn = el.dataset?.actChange && (changeActions[el.dataset.actChange] || adminChange[el.dataset.actChange]);
+  if (fn) { try { await fn(el, e); } catch (er) { console.error(er); toast(errMsg(er)); } }
+});
+document.addEventListener("input", (e) => {
+  e.target.classList?.remove("ai-filled");
+  if (e.target.id === "mmQ") { S.mm.q = e.target.value; $("#mmList").innerHTML = mmList(); }
+});
+document.addEventListener("submit", async (e) => {
+  const f = e.target.closest("form[data-form]");
+  if (!f) return;
+  e.preventDefault();
+  const fn = forms[f.dataset.form] || adminForms[f.dataset.form];
+  if (fn) { try { await fn(f, e); } catch (er) { console.error(er); toast(errMsg(er)); } }
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+window.addEventListener("hashchange", () => { render().then(() => scrollTo(0, 0)); });
 
-  /* ==========================================================
-     EVENTS (delegated)
-     ========================================================== */
-  document.addEventListener("click", (e) => {
-    const t = e.target;
-
-    // ripple on buttons (accent colour)
-    const btn = t.closest(".btn");
-    if (btn) {
-      const r = btn.getBoundingClientRect(); const s = Math.max(r.width, r.height);
-      const span = document.createElement("span"); span.className = "ripple";
-      span.style.cssText = `width:${s}px;height:${s}px;left:${e.clientX - r.left - s / 2}px;top:${e.clientY - r.top - s / 2}px`;
-      btn.appendChild(span); setTimeout(() => span.remove(), 600);
-    }
-
-    if (t.closest("[data-close]")) return closeModal();
-    if (t.closest("#navToggle")) return $("#navLinks").classList.toggle("open");
-
-    const acc = t.closest("[data-accent]");
-    if (acc && acc.closest("#accentSwitcher")) { setAccent(acc.dataset.accent); return; }
-
-    const rsvp = t.closest("[data-rsvp]");
-    if (rsvp) {
-      e.stopPropagation();
-      const id = rsvp.dataset.rsvp; let list = store.get("rsvps", []);
-      const going = list.includes(id);
-      list = going ? list.filter((x) => x !== id) : [...list, id];
-      store.set("rsvps", list);
-      toast(going ? "RSVP cancelled" : "You're on the list. See you there!");
-      return render();
-    }
-
-    const ven = t.closest("[data-venture]");
-    if (ven) return ventureModal(ven.dataset.venture);
-    const ev = t.closest("[data-event]");
-    if (ev) return eventModal(ev.dataset.event);
-
-    const roleLink = t.closest("[data-role-link]");
-    if (roleLink) store.set("pendingRole", roleLink.dataset.roleLink);
-
-    const role = t.closest("[data-role]");
-    if (role) { $$("[data-role]").forEach((r) => r.classList.toggle("on", r === role)); return; }
-
-    const chip = t.closest(".chip");
-    if (chip) {
-      const group = chip.parentElement;
-      group.classList.remove("ai-filled");
-      if (group.dataset.q !== undefined) { $$(".chip", group).forEach((c) => c.classList.toggle("on", c === chip)); }
-      else chip.classList.toggle("on");
-      return;
-    }
-
-    const om = t.closest("[data-obmode]");
-    if (om) {
-      e.preventDefault(); ob = { step: 0, mode: om.dataset.obmode || null };
-      if (location.hash !== "#onboarding") location.hash = "#onboarding"; else { render(); window.scrollTo({ top: 0 }); }
-      return;
-    }
-    if (t.closest("[data-copy-prompt]")) {
-      const box = $("#aiPrompt"); const done = () => toast("Prompt copied. Now paste it into your chatbot.");
-      const fallback = () => { box.focus(); box.select(); let ok = false; try { ok = document.execCommand("copy"); } catch {} ok ? done() : toast("Prompt selected. Press Ctrl+C (or ⌘C) to copy."); };
-      if (navigator.clipboard?.writeText) navigator.clipboard.writeText(box.value).then(done, fallback); else fallback();
-      return;
-    }
-    if (t.closest("[data-ai-sample]")) { const f = $("#aiImportForm"); f.reply.value = aiSample(user()); $("#aiErr").textContent = ""; toast("Sample reply pasted. Press Import & review."); return; }
-    const ob2 = t.closest("[data-ob='back']");
-    if (ob2) { saveOb(); ob.step--; return render(); }
-
-    const dt = t.closest("[data-dash]");
-    if (dt) { dashTab = dt.dataset.dash; return render(); }
-    if (t.closest("[data-logout]")) { store.del("user"); toast("Logged out"); location.hash = "#home"; return; }
-
-    const mt = t.closest("[data-mmtab]");
-    if (mt) { mm = { ...mm, tab: mt.dataset.mmtab, skill: "" }; return render(); }
-    const ot = t.closest("[data-opp]");
-    if (ot) { opp.type = ot.dataset.opp; return render(); }
-    const jc = t.closest("[data-jcat]");
-    if (jc) { jcat = jc.dataset.jcat; return render(); }
-
-    const con = t.closest("[data-connect]");
-    if (con) { if (!user()) { toast("Log in to connect with builders"); location.hash = "#login"; return; } toast(`Connection request sent to ${con.dataset.connect}`); return; }
-    const ao = t.closest("[data-apply-opp]");
-    if (ao) { if (!user()) { toast("Log in to apply"); location.hash = "#login"; return; } toast(`Application started: ${ao.dataset.applyOpp}`); return; }
-    if (t.closest("[data-soon]")) { e.preventDefault(); toast("Coming soon: the Research team is putting this together"); return; }
-    if (t.closest("[data-google]")) { toast("Google sign-in will be wired up with the real backend"); return; }
-    const sc = t.closest("[data-scroll]");
-    if (sc) { e.preventDefault(); document.getElementById(sc.dataset.scroll)?.scrollIntoView({ behavior: "smooth" }); }
+/* ---------- boot ---------- */
+(async function boot() {
+  const accent = new URLSearchParams(location.search).get("accent");
+  if (accent) document.documentElement.dataset.accent = accent;
+  app.innerHTML = `<div class="loading">Loading</div>`;
+  try { await db.init(); } catch (e) { console.error("Backend failed to start", e); }
+  S.settings = await db.getSettings().catch(() => S.settings);
+  applySettings();
+  let booted = false;
+  db.onAuth(async (user) => {
+    if (booted && user?.uid === S.user?.uid) return;
+    await loadUser(user);
+    if (booted) render();
   });
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeModal();
-    if (e.key === "Enter" && e.target.matches("[data-venture]")) ventureModal(e.target.dataset.venture);
-  });
-
-  document.addEventListener("input", (e) => {
-    if (e.target.classList?.contains("ai-filled")) e.target.classList.remove("ai-filled");
-    if (e.target.id === "mmQ") { mm.q = e.target.value; const pos = e.target.selectionStart; render(); const i = $("#mmQ"); i.focus(); i.setSelectionRange(pos, pos); }
-  });
-  document.addEventListener("change", (e) => {
-    if (e.target.classList?.contains("ai-filled")) e.target.classList.remove("ai-filled");
-    if (e.target.id === "mmDomain") { mm.domain = e.target.value; render(); }
-    if (e.target.id === "mmSkill") { mm.skill = e.target.value; render(); }
-  });
-
-  const isBits = (em) => /@([a-z]+\.)?bits-pilani\.ac\.in$/i.test(em.trim());
-
-  function finishOb() {
-    const u = user(); delete u._ai; delete u._blank; delete u._unmatched; store.set("user", u);
-    ob = { step: 0, mode: null }; dashTab = "overview";
-    toast("Profile saved! Welcome to FBC 🎉"); location.hash = "#dashboard";
-  }
-
-  function saveOb() {
-    const f = $("#obForm"); if (!f) return;
-    const u = user();
-    $$("input, select, textarea", f).forEach((el) => { if (!el.name) return; u[el.name] = el.type === "checkbox" ? el.checked : el.value; });
-    $$("[data-chips]", f).forEach((g) => (u[g.dataset.chips] = $$(".chip.on", g).map((c) => c.textContent)));
-    store.set("user", u);
-  }
-
-  document.addEventListener("submit", (e) => {
-    const f = e.target; e.preventDefault();
-
-    if (f.id === "loginForm") {
-      const em = f.email.value, pw = f.password.value;
-      if (!isBits(em)) return ($("#loginErr").textContent = "Please use your BITS email address.");
-      if (pw.length < 1) return ($("#loginErr").textContent = "Enter your password.");
-      const existing = user();
-      store.set("user", existing && existing.email === em ? existing : { name: em.split("@")[0], email: em, role: "builder" });
-      toast("Welcome back!"); location.hash = "#dashboard";
-    }
-    if (f.id === "signupForm") {
-      const name = f.name.value.trim(), em = f.email.value, pw = f.password.value;
-      const role = $("[data-role].on")?.dataset.role || "founder";
-      if (!name) return ($("#signupErr").textContent = "Tell us your name.");
-      if (!isBits(em)) return ($("#signupErr").textContent = "Please use your BITS email address.");
-      if (pw.length < 8) return ($("#signupErr").textContent = "Password must be at least 8 characters.");
-      store.set("user", { name, email: em, role }); ob = { step: 0, mode: null };
-      toast("Account created! Let's set up your profile."); location.hash = "#onboarding";
-    }
-    if (f.id === "obForm" && f.hasAttribute("data-review")) {
-      saveOb(); finishOb(); return;
-    }
-    if (f.id === "aiImportForm") {
-      const err = $("#aiErr"); const text = f.reply.value.trim();
-      if (!text) { err.textContent = "Paste your AI's reply first."; return; }
-      try {
-        const u = user(); const r = parseAiReply(text, u);
-        store.set("user", { ...u, ...r.out, _ai: r.ai, _blank: r.blank, _unmatched: r.unmatched });
-        ob.mode = "review"; render(); window.scrollTo({ top: 0 });
-        toast(`Imported ${r.ai.length} fields. Have a look before saving.`);
-      } catch (ex) {
-        err.textContent = ex.message === "empty"
-          ? "We found the reply but couldn't read any profile fields from it. Make sure you copied the whole code block."
-          : "We couldn't find the profile in that reply. Ask your AI to “reply with only the JSON in a code block”, then paste again.";
-      }
-      return;
-    }
-    if (f.id === "obForm") {
-      saveOb();
-      if (ob.step < 2) { ob.step++; render(); window.scrollTo({ top: 0 }); }
-      else finishOb();
-    }
-    if (f.id === "applyForm") {
-      if (!user()) { closeModal(); toast("Create an account to apply"); location.hash = "#signup"; return; }
-      const list = store.get("applications", []);
-      list.push({ id: f.dataset.id, date: new Date().toISOString().slice(0, 10) });
-      store.set("applications", list);
-      toast("Application sent!"); ventureModal(f.dataset.id);
-    }
-    if (f.id === "ideaCheck") {
-      const idea = f.idea.value.trim(); const ans = {};
-      $$("[data-q]", f).forEach((g) => { const on = $(".chip.on", g); if (on) ans[g.dataset.q] = +on.dataset.v; });
-      if (!idea) return ($("#icErr").textContent = "Write your idea in one line first.");
-      if (Object.keys(ans).length < QUESTIONS.length) return ($("#icErr").textContent = "Answer all 7 questions. “No” is a valid answer!");
-      $("#icErr").textContent = "";
-      const list = store.get("ideachecks", []); list.push({ idea, ans, date: Date.now() }); store.set("ideachecks", list);
-      $("#icResult").innerHTML = ideaResult(idea, ans);
-      $("#icResult").scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-    if (f.id === "contactForm") { f.reset(); toast("Message sent. We'll get back to you soon."); }
-    if (f.hasAttribute("data-subscribe")) { f.reset(); toast("Subscribed to The Builder's Brief ✓"); }
-  });
-
-  /* ---------- accent switcher (prototype only) ---------- */
-  function setAccent(a) {
-    if (a === "teal") document.documentElement.removeAttribute("data-accent");
-    else document.documentElement.setAttribute("data-accent", a);
-    $$("#accentSwitcher button").forEach((b) => b.classList.toggle("on", b.dataset.accent === a));
-    store.set("accent", a);
-  }
-  setAccent(store.get("accent", "teal"));
-
-  /* ---------- nav shadow + cursor glow ---------- */
-  window.addEventListener("scroll", () => $("#nav").classList.toggle("scrolled", scrollY > 10), { passive: true });
-  const glow = $(".cursor-glow");
-  window.addEventListener("pointermove", (e) => { glow.style.left = e.clientX + "px"; glow.style.top = e.clientY + "px"; }, { passive: true });
-
-  // apply pending role (from "List your idea" / "Create builder profile" buttons)
-  window.addEventListener("hashchange", () => {
-    render();
-    if (!location.hash.includes("journal-")) window.scrollTo({ top: 0 });
-    const pr = store.get("pendingRole");
-    if (pr && location.hash === "#signup") { $$("[data-role]").forEach((r) => r.classList.toggle("on", r.dataset.role === pr)); store.del("pendingRole"); }
-  });
-  render();
+  await loadUser(db.user());
+  booted = true;
+  await render();
 })();
+
+export { render, go, applySettings, eventRow, ventureRow, statusLabel };

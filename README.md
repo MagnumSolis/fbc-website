@@ -1,42 +1,32 @@
-# FBC Website: Prototype v0.1
+# FBC website
 
-Clickable prototype for the Founders and Builders Collective (BITS Pilani) website.
-Plain HTML/CSS/JS with no build step. All data is **sample data** and login is mocked with `localStorage`.
+The website of the **Founders and Builders Collective**, a student entrepreneurship community at BITS Pilani: co-founder matchmaking, member profiles and dashboards, AI-assisted onboarding, idea validation (with VistaDex), opportunities, events, a journal, resources, and an admin console.
 
-## Run it
-    cd fbc-website
-    python3 -m http.server 8000
-    # open http://localhost:8000
+**Live site:** https://magnumsolis.github.io/fbc-website/
 
-## Pages (hash routes)
-| Route | What it is |
-|---|---|
-| `#/` | Landing: hero, the co-founder problem (Way 1 vs Way 2), 4 pillars, matchmaking, VistaDex, events, journal |
-| `#/signup` `#/login` | BITS-email-only auth, role picker (Founder / Builder / Explorer) |
-| `#/onboarding` | 3-step profile setup, with different questions for founders vs builders |
-| `#/dashboard` | Profile completion, match suggestions, applications, RSVPs, profile |
-| `#/matchmaking` | Ventures and builders directory with search and filters, apply modal |
-| `#/validate` | VistaDex feature + free 7-question idea check (no login needed) |
-| `#/opportunities` | Internships / campus startup roles / projects |
-| `#/events` | Upcoming and past events, RSVP |
-| `#/journal` `#/journal/:id` | Startup stories, analysis, failure files, newsletter |
-| `#/resources` | Guides, templates, books, tools |
-| `#/roadmap` | Founder journey + FBC phase timeline |
-| `#/contact` | Contact form, core team, FAQ |
+Plain HTML, CSS and JavaScript (ES modules). No build step: edit a file, push, done.
 
-## Design system
-- **Black** `#0A0B0D` + **Gold** `#F5B829` (taken from the logo dot and banner)
-- **Third accent** is used *only* for interaction: hover, focus rings, button press ripple, active states.
-  The floating "Accent" switcher (bottom-right) lets the team try Teal / Ember / Violet / Ice live. Delete it once you've picked one.
-- Fonts: Outfit (display), Inter (body), Caveat (the "From Ideas to Impact" script)
+## Two modes
+- **Demo** (default, `firebase: null` in `js/config.js`): fully clickable, data saved only in the visitor's browser. The first account you create in a browser is an admin, so you can explore the console.
+- **Live**: Firebase Auth (Google, BITS accounts only) + Cloud Firestore. Follow **[SETUP.md](SETUP.md)** (about 20 minutes, free).
 
-## Files
-- `js/data.js`: all sample content (ventures, events, posts, roadmap…). Edit this to change content.
-- `js/app.js`: router, views and interactions
-- `css/styles.css`: tokens at the top (`:root`)
+## Pages
+`#home` · `#matchmaking` · `#validate` · `#opportunities` · `#events` · `#journal` (and `#journal-<post-id>`) · `#resources` · `#about` · `#contact` · `#join` · `#login` · `#onboarding` · `#dashboard` · `#admin`
 
-## TODO before real launch
-- [ ] Real VistaDex URL + description (`links.vistadex` in `data.js`, copy in the `validate` view)
-- [ ] Real backend/auth (e.g. Supabase/Firebase with Google sign-in restricted to BITS domain)
-- [ ] Real events, posts, opportunities
-- [ ] Confirm event venues
+## Code map
+| File | What it does |
+| --- | --- |
+| `index.html` | Page shell: nav, footer, modal |
+| `css/styles.css` | All styles. Design tokens at the top |
+| `js/config.js` | Firebase config and default links. **The one file to edit to go live** |
+| `js/content.js` | Option lists (domains, skills, stages…), roadmap, team, sample data |
+| `js/db.js` | Data layer: demo engine (localStorage) and Firebase engine, one API |
+| `js/app.js` | Router, public pages, sign-in, onboarding, member dashboard |
+| `js/admin.js` | Admin console |
+| `js/ai.js` | AI-assisted onboarding: the prompt and the reply parser |
+| `js/ui.js` | Shared state and small helpers (escaping, dates, Markdown, CSV) |
+| `firestore.rules` | Server-side security rules: who can read and write what |
+| `tests/rules.test.mjs` | 20 tests for the security rules (`npm run test:rules`) |
+
+## Design
+Editorial dark theme: near-black, warm white, brand gold `#F2B630`. Instrument Serif for headlines, Inter for text, IBM Plex Mono for labels. One interaction colour (teal by default) for hover, focus and active states; try others with `?accent=ember`, `?accent=violet` or `?accent=ice` on the URL.

@@ -1,0 +1,17 @@
+{
+  "name": "fbc-website",
+  "private": true,
+  "description": "Founders and Builders Collective website. No build step: the site is plain HTML/CSS/JS.",
+  "type": "module",
+  "scripts": {
+    "serve": "python3 -m http.server 8000",
+    "emulators": "firebase emulators:start --only auth,firestore --project demo-fbc",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-fbc \"node --test tests/*.test.mjs\"",
+    "deploy:rules": "firebase deploy --only firestore:rules"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.0",
+    "firebase": "13.4.0",
+    "firebase-tools": "^15.37.0"
+  }
+}
