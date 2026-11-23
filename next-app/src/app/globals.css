@@ -30,9 +30,9 @@
   --danger: #EF6F62;
   --shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 24px 60px -24px rgba(0,0,0,.65);
 
-  --serif: "Instrument Serif", "Times New Roman", serif;
-  --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --serif: var(--font-serif), "Instrument Serif", "Times New Roman", serif;
+  --sans: var(--font-sans), "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: var(--font-mono), "IBM Plex Mono", ui-monospace, Menlo, monospace;
 
   --r: 8px;
   --r-lg: 20px;
@@ -738,3 +738,6 @@ html, body { overflow-x: clip; }
   box-shadow: inset 0 1px 0 rgba(255,250,235,.10), 0 30px 60px -20px rgba(0,0,0,.9);
 }
 .mock .mock-venture { background: rgba(255,240,210,.04); border-color: rgba(255,240,210,.08); }
+
+/* numbers inside the stat band keep the big number style (the caption rule must not apply) */
+.statband b span { display: inline; margin: 0; font: inherit; color: inherit; max-width: none; }
