@@ -57,7 +57,7 @@ export async function adminView() {
       <hr/><a href="#dashboard">My dashboard</a><button data-act="adm-refresh">Refresh data</button>
     </aside>
     <div>
-      <div class="spread" style="margin-bottom:2rem"><div><span class="label">Admin console · ${db.mode === "demo" ? "Demo data" : "Live data"}</span><h2 class="mt-1">${TABS.find((t) => t[0] === tab)[1]}</h2></div>
+      <div class="spread dash-hero"><div><span class="label">Admin console · ${db.mode === "demo" ? "Demo data" : "Live data"}</span><h2 class="mt-1">${TABS.find((t) => t[0] === tab)[1]}</h2></div>
         ${SCHEMAS[tab] ? `<button class="btn btn-primary" data-act="adm-new" data-col="${tab}">New ${SCHEMAS[tab].singular}</button>` : ""}</div>
       ${body}
     </div>

@@ -29,4 +29,4 @@ Plain HTML, CSS and JavaScript (ES modules). No build step: edit a file, push, d
 | `tests/rules.test.mjs` | 20 tests for the security rules (`npm run test:rules`) |
 
 ## Design
-Editorial dark theme: near-black, warm white, brand gold `#F2B630`. Instrument Serif for headlines, Inter for text, IBM Plex Mono for labels. One interaction colour (teal by default) for hover, focus and active states; try others with `?accent=ember`, `?accent=violet` or `?accent=ice` on the URL.
+Warm dark sections alternating with cream "paper" sections, brand gold `#F2B630`, a code-built product preview in the hero, and a bento feature grid. Instrument Serif for headlines, Inter for text, IBM Plex Mono for labels. One interaction colour (teal by default) for hover, focus and active states; try others with `?accent=ember`, `?accent=violet` or `?accent=ice` on the URL.

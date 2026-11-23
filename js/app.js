@@ -41,113 +41,158 @@ const eventRow = (e, rsvps = []) => {
   </div>`;
 };
 
-const postCard = (p) => `
-  <a class="post" href="#journal-${esc(p.id)}">
-    <span class="label">${esc(p.cat)} · ${fmtDate(p.date)}</span>
-    <h3>${esc(p.title)}</h3>
-    <p>${esc(p.excerpt)}</p>
-    <span class="xs faint">${esc(p.author)}${p.read ? ` · ${esc(p.read)} read` : ""}</span>
+const signInPrompt = (what) => `<div class="empty"><p>Sign in with your BITS account to ${what}.</p><div class="row mt-2" style="justify-content:center"><a href="#login" class="btn btn-primary btn-sm">Sign in</a></div></div>`;
+const statusLabel = (s) => ({ new: "New", reviewing: "Reviewing", accepted: "Accepted", declined: "Declined", live: "Live", paused: "Paused", hidden: "Hidden" }[s] || s);
+
+const COVER = { "Startup Story": "c0", "Analysis": "c1", "Failure Files": "c2", "Newsletter": "c3" };
+const postCard = (p, featured = false) => `
+  <a class="post ${featured ? "featured" : ""}" href="#journal-${esc(p.id)}">
+    <div class="cover ${COVER[p.cat] || "c0"}"><span>${esc(p.cat)}</span></div>
+    <div class="post-body">
+      ${featured ? `<span class="label gold">Featured story</span>` : ""}
+      <h3>${esc(p.title)}</h3>
+      <p>${esc(p.excerpt)}</p>
+      <span class="meta">${esc(p.author)} · ${fmtDate(p.date)}${p.read ? ` · ${esc(p.read)} read` : ""}</span>
+    </div>
   </a>`;
 
 const cta = () => `
-  <section class="cta"><div class="container">
-    <span class="label">Join</span>
-    <h2 class="mt-2">Have an idea? <em>Find your people.</em></h2>
-    <p class="lead mt-3">Free for every BITSian, from any branch or year. Sign in with your BITS Google account.</p>
-    <div class="row mt-4"><a href="#join" class="btn btn-primary btn-lg">Join FBC</a><a href="${esc(S.settings.whatsapp)}" target="_blank" rel="noopener" class="btn btn-lg">WhatsApp community</a></div>
+  <section class="section"><div class="container">
+    <div class="cta-gold">
+      <span class="label" style="color:rgba(26,20,4,.6)">Free for every BITSian</span>
+      <h2 class="mt-2">Have an idea? <em>Find your people.</em></h2>
+      <p class="lead mt-3">Any branch, any year, with or without an idea. Sign in with your BITS Google account and you're in.</p>
+      <div class="row mt-4"><a href="#join" class="btn btn-dark btn-lg">Join FBC</a><a href="${esc(S.settings.whatsapp)}" target="_blank" rel="noopener" class="btn btn-lg">WhatsApp community</a></div>
+    </div>
   </div></section>`;
 
-const signInPrompt = (what) => `<div class="empty"><p>Sign in with your BITS account to ${what}.</p><div class="row mt-2" style="justify-content:center"><a href="#login" class="btn btn-primary btn-sm">Sign in</a></div></div>`;
-const statusLabel = (s) => ({ new: "New", reviewing: "Reviewing", accepted: "Accepted", declined: "Declined", live: "Live", paused: "Paused", hidden: "Hidden" }[s] || s);
+/* Product preview used in the hero and on the sign-in page. Pure HTML/CSS, so it's sharp at any size. */
+const SAMPLE_V = { name: "Voltway", pitch: "Battery-swap stations for campus e-scooters. Swap in 30 seconds, pay per swap.", needs: ["Hardware / IoT", "Finance"], domains: ["ClimateTech"], stage: 2 };
+const productMock = (v = SAMPLE_V, floats = true) => {
+  const logo = String(v.name || "FB").replace(/[^A-Za-z]/g, "").slice(0, 2).toUpperCase() || "FB";
+  return `
+  <div class="mock rise d2" aria-hidden="true">
+    <div class="mock-window">
+      <div class="mock-bar"><i></i><i></i><i></i><span>fbc / matchmaking / ${esc(String(v.name).toLowerCase())}</span></div>
+      <div class="mock-body">
+        <div class="mock-venture">
+          <div class="mock-logo">${esc(logo)}</div>
+          <div><h4>${esc(v.name)}</h4><p>${esc(v.pitch)}</p>
+            <div class="mock-chips">${(v.needs || []).slice(0, 3).map((n) => `<span class="need">Needs ${esc(n)}</span>`).join("")}${(v.domains || []).slice(0, 1).map((d) => `<span>${esc(d)}</span>`).join("")}</div></div>
+          <div class="mock-stat"><b>${esc(C.STAGES[v.stage] || "Idea")}</b><small>Stage</small></div>
+        </div>
+        <div>
+          <div class="mock-row">${avatar("Ananya Gupta")}<span><b>Ananya G.</b> · Full-stack dev, 2nd year</span><span class="st new">New</span></div>
+          <div class="mock-row">${avatar("Rohan Verma")}<span><b>Rohan V.</b> · Finance, 3rd year</span><span class="st rev">Reviewing</span></div>
+          <div class="mock-row">${avatar("Arjun Nair")}<span><b>Arjun N.</b> · Hardware / IoT, 4th year</span><span class="st acc">Accepted</span></div>
+        </div>
+      </div>
+    </div>
+    ${floats ? `
+    <div class="mock-float mock-match"><div class="ring"><span>94%</span></div><div><small>Skill match</small><b>Arjun ↔ ${esc(v.name)}</b></div></div>
+    <div class="mock-float mock-toast"><span class="dot"></span><p><b>Meera J.</b> applied to join ${esc(v.name)} as a content lead</p></div>` : ""}
+  </div>`;
+};
 
 /* ==========================================================
    PUBLIC PAGES
    ========================================================== */
 views.home = async () => {
-  const [ventures, events, posts] = await Promise.all([db.list("ventures"), db.list("events"), db.list("posts")]);
-  const vs = ventures.sort(byDateDesc("updatedAt")).slice(0, 5);
-  const up = upcoming(events).slice(0, 3);
+  const [ventures, events, posts, opps] = await Promise.all([db.list("ventures"), db.list("events"), db.list("posts"), db.list("opportunities")]);
+  const vs = ventures.sort(byDateDesc("updatedAt"));
+  const up = upcoming(events);
   const ps = posts.sort(byDateDesc("date")).slice(0, 3);
   const rsvps = S.user ? await db.myRsvps(S.user.uid).catch(() => []) : [];
+  const next = up[0];
+  const heroV = vs.find((v) => (v.needs || []).length) || SAMPLE_V;
+  const day = (e) => { const d = parseDay(e.date); return d ? `<div class="date ${e === next ? "on" : ""}"><b>${d.getDate()}</b><small>${d.toLocaleString("en", { month: "short" })}</small></div>` : ""; };
   return `
-  <section class="hero"><div class="container">
-    <div class="hero-grid">
-      <div>
-        <span class="label">BITS Pilani · Student community · Since 2026</span>
-        <h1>Find the people<br/>to <em>build it</em> with.</h1>
-        <p class="lead">Founders and Builders Collective connects BITSians who have ideas with BITSians who want to build them. Find a co-founder, join a startup, and learn how companies actually get made.</p>
-        <div class="row"><a href="#join" class="btn btn-primary btn-lg">Join FBC</a><a href="#matchmaking" class="btn btn-lg">Browse ventures</a></div>
-      </div>
-      <figure class="hero-figure">
-        <img src="assets/campus.webp" alt="Line drawing of the BITS Pilani clock tower" width="470" height="350"/>
-        <figcaption><span class="label">Clock Tower, Pilani</span><span class="label">Ideas / People / Impact</span></figcaption>
-      </figure>
-    </div>
-    <div class="facts">
-      <div class="fact"><b>1,200</b><span>students join BITS Pilani every year, and many arrive wanting to build something.</span></div>
-      <div class="fact"><b>20–25</b><span>seats a year in established clubs, for the hundreds who apply.</span></div>
-      <div class="fact"><b>1 profile</b><span>is all it takes here to reach every builder on campus.</span></div>
-    </div>
-  </div></section>
-
-  <section class="section"><div class="container sec-grid">
-    <span class="label">01 — The problem</span>
+  <section class="hero"><div class="container hero-grid">
     <div>
-      <h2>Finding a co-founder shouldn't take a semester.</h2>
-      <p class="lead mt-3">Interest and ability were never the issue on this campus. There just wasn't a place for people with ideas to meet the people who could build them.</p>
-      <div class="compare mt-4">
-        <div><span class="label">Without FBC</span>
-          <ol><li>Message 500+ people, one by one</li><li>Pitch to the hundreds who reply</li><li>Filter for who likes the idea</li><li>Filter again for who'll actually work on it</li><li>Maybe find one co-founder, months later</li></ol></div>
-        <div><span class="label gold">With FBC</span>
-          <p class="big">Post once.<br/>Get found.</p>
-          <p class="mt-2">List your idea and the skills you need. Builders who want in apply to you, and you meet them in person at Pitch Night.</p>
-          <a class="arrow-link mt-3" href="#matchmaking">See open ventures</a></div>
-      </div>
+      ${next ? `<a class="pill rise" href="#events"><b>Next up</b><span>${esc(next.title)}, ${fmtDate(next.date, { day: "numeric", month: "short" })}</span></a>` : `<span class="label rise">BITS Pilani · Student community</span>`}
+      <h1 class="rise d1">Find the people<br/>to <em>build it</em> with.</h1>
+      <p class="lead rise d2">FBC is where BITSians with ideas meet BITSians who want to build them. List your idea or join one, find a co-founder, and learn how startups actually get made.</p>
+      <div class="row rise d3"><a href="#join" class="btn btn-primary btn-lg">Join FBC, it's free</a><a href="#matchmaking" class="btn btn-lg">Browse ventures</a></div>
+      ${vs.length ? `<div class="trust rise d3"><div class="faces">${vs.slice(0, 5).map((v) => avatar(v.founderName || v.name)).join("")}</div><span>${vs.length} venture${vs.length === 1 ? "" : "s"} looking for co-founders right now</span></div>` : ""}
     </div>
+    ${productMock(heroV)}
   </div></section>
 
-  <section class="section"><div class="container sec-grid">
-    <span class="label">02 — What we do</span>
-    <div>
-      <h2>Learn, connect, build, pitch.</h2>
-      <div class="cols mt-4">
-        ${[["Learn", "Workshops, founder talks, case studies and a growing library of resources.", ["Knowledge sessions", "Startup case studies", "Founder interviews"]],
-           ["Connect", "Meet people with complementary skills. Find co-founders and collaborators.", ["Co-founder matchmaking", "Member profiles", "Community meets"]],
-           ["Build", "Move from idea to execution on real problems with real teams.", ["Ideation sessions", "Validation exercises", "MVP challenges"]],
-           ["Pitch", "Present your work, get honest feedback, and find what comes next.", ["Pitch nights", "Demo days", "Mentor introductions"]]]
-          .map(([t, d, l], i) => `<div class="col"><span class="label">0${i + 1}</span><h3>${t}</h3><p>${d}</p><ul>${l.map((x) => `<li>${x}</li>`).join("")}</ul></div>`).join("")}
-      </div>
-    </div>
-  </div></section>
+  <div class="container"><div class="statband">
+    <div><b>1,200</b><span>students join BITS Pilani every year, and many arrive wanting to build something.</span></div>
+    <div><b>20–25</b><span>seats a year in established clubs, for the hundreds who apply.</span></div>
+    <div><b><em>1</em> profile</b><span>is all it takes here to reach every builder on campus.</span></div>
+  </div></div>
 
-  <section class="section"><div class="container">
-    <div class="sec-head"><div><span class="label">03 — Open ventures</span><h2 class="mt-2">Ideas looking for builders.</h2></div>
-      <a href="#matchmaking" class="arrow-link">All ventures</a></div>
-    <div class="list">${ventureHead()}${vs.map(ventureRow).join("") || `<div class="empty">No ventures listed yet. Be the first.</div>`}</div>
-  </div></section>
-
-  <section class="section"><div class="container">
-    <div class="feature">
-      <div><span class="label">04 — Validate</span>
-        <h2 class="mt-2">Test your idea <em>before</em> you build it.</h2>
-        <p class="lead mt-3">Most startups fail because nobody needed what they built. Run our seven-question check in two minutes, or go deeper with VistaDex, built by an FBC member.</p>
-        <div class="row mt-4"><a href="#validate" class="btn btn-primary">Check my idea</a></div></div>
-      <div><ol>
-        <li><div><h3>Name the problem</h3><p class="small mt-1">In one sentence, without mentioning your solution.</p></div></li>
-        <li><div><h3>Find who has it</h3><p class="small mt-1">A specific group you can reach this week, not "everyone".</p></div></li>
-        <li><div><h3>Look for proof</h3><p class="small mt-1">Workarounds, money spent, people asking to pay.</p></div></li>
-      </ol></div>
+  <section class="section paper" style="margin-top:112px"><div class="container">
+    <div class="sec-head"><div><span class="label kicker">The problem</span><h2>Finding a co-founder shouldn't take a semester.</h2></div>
+      <p>Interest and ability were never the issue on this campus. There just wasn't a place for people with ideas to meet the people who could build them.</p></div>
+    <div class="compare">
+      <div><span class="label">The old way</span>
+        <ol><li>Message 500+ people, one by one</li><li>Pitch to the hundreds who reply</li><li>Filter for who likes the idea</li><li>Filter again for who'll actually work on it</li><li>Maybe find one co-founder, months later</li></ol></div>
+      <div class="dark"><span class="label gold">With FBC</span>
+        <p class="big">Post once.<br/><em>Get found.</em></p>
+        <p class="mt-3">List your idea and the skills you need. Builders who want in apply to you, you review them in your dashboard, and you meet in person at Pitch Night.</p>
+        <a class="btn btn-primary mt-4" href="#matchmaking">See open ventures</a></div>
     </div>
   </div></section>
 
   <section class="section"><div class="container">
-    <div class="sec-head"><div><span class="label">05 — Upcoming</span><h2 class="mt-2">Events</h2></div><a href="#events" class="arrow-link">All events</a></div>
-    <div class="list">${up.map((e) => eventRow(e, rsvps)).join("") || `<div class="empty">New events are announced soon.</div>`}</div>
+    <div class="sec-head"><div><span class="label kicker">What you get</span><h2>Everything you need to go from <em>idea</em> to team.</h2></div>
+      <p>One place for the whole journey: find people, test the idea, learn from founders, and get on stage.</p></div>
+    <div class="bento">
+      <a class="tile t-lg" href="#matchmaking">
+        <div class="art"><div class="people">
+          ${[["Ananya Gupta", "Full-stack dev · 2nd year", 94], ["Arjun Nair", "Hardware / IoT · 4th year", 88], ["Meera Joshi", "Content & growth · 1st year", 81]].map(([n, s, p]) => `<div class="person-chip">${avatar(n)}<div><b>${n}</b><small>${s}</small></div><span class="pct">${p}%</span></div>`).join("")}
+        </div></div>
+        <div class="txt"><span class="label gold">Co-founder matchmaking</span><h3 class="mt-1">List your idea. The right builders find you.</h3><p>Founders post what they're building and who they need. Builders apply with one click, and founders review everyone from their dashboard.</p><span class="arrow-link">Browse ventures</span></div>
+      </a>
+      <a class="tile t-md" href="#validate">
+        <div class="art"><svg class="dial" viewBox="0 0 120 120"><circle cx="60" cy="60" r="50" fill="none" stroke="var(--line-2)" stroke-width="8"/><circle cx="60" cy="60" r="50" fill="none" stroke="var(--gold)" stroke-width="8" stroke-linecap="round" stroke-dasharray="314" stroke-dashoffset="69" transform="rotate(-90 60 60)"/><text x="60" y="72" text-anchor="middle" class="dial-num">78</text></svg></div>
+        <div class="txt"><h3>Validate first</h3><p>A seven-question idea check, plus VistaDex for the deep dive.</p></div>
+      </a>
+      <a class="tile t-md" href="#join">
+        <div class="art"><div class="prompt-art"><span class="k">"venture_name"</span>: <span class="v">"Voltway"</span><span class="ai-badge">AI</span><br/><span class="k">"stage"</span>: <span class="v">"Building MVP"</span><span class="ai-badge">AI</span><br/><span class="k">"skills_needed"</span>: [<span class="v">"Finance"</span>]</div></div>
+        <div class="txt"><h3>Two-minute profile</h3><p>Let the AI assistant you already use fill it in. You check it before saving.</p></div>
+      </a>
+      <a class="tile t-md" href="#events">
+        <div class="art"><div class="dates">${up.slice(0, 3).map(day).join("") || `<div class="date on"><b>4</b><small>Dec</small></div>`}</div></div>
+        <div class="txt"><h3>Pitch nights and talks</h3><p>${next ? `Next: ${esc(next.title)}.` : "Workshops, founder firesides and community meets."}</p></div>
+      </a>
+      <a class="tile t-md" href="#opportunities">
+        <div class="art"><div class="roles-art">${opps.slice(0, 3).map((o) => `<div><span>${esc(o.title)}</span><small>${esc(o.type)}</small></div>`).join("")}</div></div>
+        <div class="txt"><h3>Real startup work</h3><p>Internships, founder's office roles and projects.</p></div>
+      </a>
+      <a class="tile t-md" href="#journal">
+        <div class="art"><div class="pages-art">${ps.slice(0, 3).reverse().map((p) => `<div><small>${esc(p.cat)}</small>${esc(p.title)}</div>`).join("")}</div></div>
+        <div class="txt"><h3>The Journal</h3><p>Startup stories, failures included, every two weeks.</p></div>
+      </a>
+    </div>
+  </div></section>
+
+  <section class="section paper"><div class="container">
+    <div class="sec-head"><div><span class="label kicker">How it works</span><h2>Three steps to a team.</h2></div><a href="#join" class="btn btn-primary">Get started</a></div>
+    <div class="how">
+      <div><h3>List or join</h3><p>Sign in with your BITS account. Founders describe the idea and the skills they need; builders say what they're good at.</p></div>
+      <div><h3>Apply and review</h3><p>Builders apply to the ventures they believe in. Founders see every applicant, mark them, and build the team.</p></div>
+      <div><h3>Meet at Pitch Night</h3><p>Every listed founder gets a slot to pitch to the room. Conversations start, and teams form in person.</p></div>
+    </div>
   </div></section>
 
   <section class="section"><div class="container">
-    <div class="sec-head"><div><span class="label">06 — Journal</span><h2 class="mt-2">Startup stories and analysis</h2></div><a href="#journal" class="arrow-link">Read the journal</a></div>
-    <div class="grid g3">${ps.map(postCard).join("")}</div>
+    <div class="sec-head"><div><span class="label kicker">Open ventures</span><h2>Ideas looking for builders.</h2></div><a href="#matchmaking" class="arrow-link">All ventures</a></div>
+    <div class="list boxed">${ventureHead()}${vs.slice(0, 5).map(ventureRow).join("") || `<div class="empty">No ventures listed yet. Be the first.</div>`}</div>
+  </div></section>
+
+  <section class="section paper"><div class="container">
+    <div class="grid g2" style="gap:4rem;align-items:start">
+      <div><span class="label kicker">Upcoming</span><h2 class="mt-2" style="margin-bottom:2rem">Events</h2>
+        <div class="list boxed">${up.slice(0, 4).map((e) => eventRow(e, rsvps)).join("") || `<div class="empty">New events are announced soon.</div>`}</div>
+        <a href="#events" class="arrow-link mt-3">All events</a></div>
+      <div><span class="label kicker">From the journal</span><h2 class="mt-2" style="margin-bottom:2rem">Latest stories</h2>
+        ${ps[0] ? postCard(ps[0]) : ""}
+        <a href="#journal" class="arrow-link mt-3">Read the journal</a></div>
+    </div>
   </div></section>
   ${cta()}`;
 };
@@ -168,7 +213,7 @@ views.matchmaking = async () => {
       <select class="input" id="mmDomain" aria-label="Domain"><option value="">All domains</option>${C.DOMAINS.map((d) => `<option ${S.mm.domain === d ? "selected" : ""}>${d}</option>`).join("")}</select>
       <select class="input" id="mmSkill" aria-label="Skill"><option value="">${t === "ventures" ? "Any skill needed" : "Any skill"}</option>${C.SKILLS.map((d) => `<option ${S.mm.skill === d ? "selected" : ""}>${d}</option>`).join("")}</select>
     </div>
-    <div class="list" id="mmList">${mmList()}</div>
+    <div class="list boxed" id="mmList">${mmList()}</div>
   </section>`;
 };
 function mmList() {
@@ -246,13 +291,13 @@ views.validate = async () => {
       </ol></div>
     </div>
   </div></section>
-  <section class="section" id="quickcheck"><div class="narrow">
+  <section class="section paper" id="quickcheck"><div class="narrow">
     <span class="label">Quick idea check · Free, no sign-in</span>
     <h2 class="mt-2">How validated is your idea?</h2>
     <p class="mt-2">Be honest. ${S.user ? "Your result is saved to your dashboard, visible only to you." : "Nothing is saved unless you're signed in."}</p>
     <form data-form="ideacheck" class="mt-4">
       <div class="field"><label for="idea">Your idea in one line</label><input class="input" id="idea" name="idea" placeholder="Battery-swap stations for campus e-scooters" required maxlength="200"/></div>
-      <div class="list mt-3">
+      <div class="list boxed mt-3">
       ${QUESTIONS.map(([k, q], i) => `
         <div class="list-row" style="grid-template-columns:2rem 1fr auto">
           <span class="label">0${i + 1}</span><span>${q}</span>
@@ -290,7 +335,7 @@ views.opportunities = async () => {
   <section class="container" style="padding-bottom:96px">
     <div class="toolbar"><div class="seg">${["All", ...C.OPP_TYPES].map((t) => `<button data-act="opp-type" data-type="${t}" class="${S.opp === t ? "on" : ""}">${t}</button>`).join("")}</div>
       <span class="xs faint" style="margin-left:auto">${list.length} open</span></div>
-    <div class="list">${list.map((o) => `
+    <div class="list boxed">${list.map((o) => `
       <div class="list-row" style="grid-template-columns:2fr 1.3fr 1fr auto">
         <div><span class="title">${esc(o.title)}</span><div class="tagline">${esc(o.org)}</div></div>
         <div class="small muted">${dots([o.type, o.mode, o.duration])}</div>
@@ -310,9 +355,9 @@ views.events = async () => {
   ${pageHead("Events", "Show up. Meet people. Pitch.", "Pitch nights, workshops, founder firesides and community meets. Announcements also go out on the WhatsApp community.")}
   <section class="container section-sm">
     <span class="label">Upcoming</span>
-    <div class="list mt-2">${upcoming(events).map((e) => eventRow(e, rsvps)).join("") || `<div class="empty">New events are announced soon.</div>`}</div>
+    <div class="list boxed mt-2">${upcoming(events).map((e) => eventRow(e, rsvps)).join("") || `<div class="empty">New events are announced soon.</div>`}</div>
     <span class="label" style="display:block;margin-top:4rem">Past</span>
-    <div class="list mt-2">${past(events).map((e) => eventRow(e)).join("")}</div>
+    <div class="list boxed mt-2">${past(events).map((e) => eventRow(e)).join("")}</div>
   </section>
   ${cta()}`;
 };
@@ -333,14 +378,11 @@ views.journal = async () => {
   const list = posts.filter((p) => (S.jcat !== "All" || p !== feat) && (S.jcat === "All" || p.cat === S.jcat));
   return `
   ${pageHead("Journal", "Startup stories, analysis and the newsletter.", "One company per story: why it started, the problem, the business model, the money, and the mistakes. The ones that didn't make it too.")}
-  <section class="container section-sm">
-    ${feat && S.jcat === "All" ? `<a class="post" href="#journal-${esc(feat.id)}" style="border:0;padding:0">
-      <span class="label gold">Featured · ${esc(feat.cat)}</span>
-      <h3 style="font-size:clamp(2rem,4vw,3rem);max-width:22ch">${esc(feat.title)}</h3>
-      <p class="lead">${esc(feat.excerpt)}</p><span class="xs faint">${esc(feat.author)} · ${fmtDate(feat.date)}${feat.read ? ` · ${esc(feat.read)} read` : ""}</span></a>` : ""}
+  <section class="section-sm paper"><div class="container">
+    ${feat && S.jcat === "All" ? postCard(feat, true) : ""}
     <div class="toolbar mt-4"><div class="seg">${["All", ...C.POST_CATS].map((c) => `<button data-act="jcat" data-cat="${c}" class="${S.jcat === c ? "on" : ""}">${c}</button>`).join("")}</div></div>
-    <div class="grid g3">${list.map(postCard).join("") || `<div class="empty" style="grid-column:1/-1">No posts here yet.</div>`}</div>
-  </section>
+    <div class="grid g3">${list.map((p) => postCard(p)).join("") || `<div class="empty" style="grid-column:1/-1">No posts here yet.</div>`}</div>
+  </div></section>
   <section class="section"><div class="container">${newsletter()}</div></section>`;
 };
 const newsletter = () => `
@@ -367,15 +409,15 @@ views.resources = async () => {
   const res = (await db.list("resources")).sort((a, b) => (a.order || 0) - (b.order || 0));
   return `
   ${pageHead("Resources", "The founder's library.", "Guides, templates, books and tools picked by the Research & Knowledge team.")}
-  <section class="container section-sm">
+  <section class="section-sm paper"><div class="container">
     ${C.SHELVES.map((sh) => { const items = res.filter((r) => r.shelf === sh); return items.length ? `
       <div class="sec-grid" style="margin-bottom:3.5rem"><span class="label">${sh}</span>
-        <div class="list">${items.map((r) => `
+        <div class="list boxed">${items.map((r) => `
           <div class="list-row" style="grid-template-columns:1fr auto">
             <div><span class="title">${esc(r.title)}</span>${r.featured ? ` <span class="tag gold" style="margin-left:.4rem">Featured</span>` : ""}<div class="tagline">${esc(r.desc)}</div></div>
             ${r.url ? `<a class="arrow-link small" href="${esc(r.url)}" ${r.url.startsWith("#") ? "" : 'target="_blank" rel="noopener"'}>Open</a>` : `<span class="xs faint">Coming soon</span>`}
           </div>`).join("")}</div></div>` : ""; }).join("")}
-  </section>`;
+  </div></section>`;
 };
 
 /* ---------- about (mission, roadmap, team) ---------- */
@@ -390,7 +432,7 @@ views.about = async () => `
         <div class="col"><h3>Collaborative</h3><p>Building a startup shouldn't be a lonely ambition. Find the people to do it with.</p></div>
       </div></div>
   </div></section>
-  <section class="section"><div class="container sec-grid">
+  <section class="section paper"><div class="container sec-grid">
     <span class="label">Roadmap</span>
     <div><h2>Where we've been, where we're going.</h2>
       <div class="timeline mt-4">${C.ROADMAP.map((r) => `
@@ -418,7 +460,7 @@ views.contact = async () => `
       <div><button class="btn btn-primary">Send message</button></div>
     </form>
     <div>
-      <div class="list">
+      <div class="list boxed">
         <a class="list-row" style="grid-template-columns:1fr auto" href="${esc(S.settings.whatsapp)}" target="_blank" rel="noopener"><div><span class="title">WhatsApp community</span><div class="tagline">The fastest way to reach us and hear about events.</div></div><span class="go">↗</span></a>
         <a class="list-row" style="grid-template-columns:1fr auto" href="${esc(S.settings.joinForm)}" target="_blank" rel="noopener"><div><span class="title">Join form</span><div class="tagline">Tell us what you'd like FBC to organise.</div></div><span class="go">↗</span></a>
         ${S.settings.contactEmail ? `<div class="list-row" style="grid-template-columns:1fr"><div><span class="title">Email</span><div class="tagline">${esc(S.settings.contactEmail)}</div></div></div>` : ""}
@@ -442,7 +484,7 @@ views.notfound = async () => `<section class="section first"><div class="contain
 const authArt = (quote, cite) => `
   <aside class="auth-art"><span class="label">Founders &amp; Builders Collective</span>
     <div><blockquote>${quote}</blockquote><cite>${cite}</cite></div>
-    <img src="assets/campus.webp" alt="" aria-hidden="true"/></aside>`;
+    ${productMock(SAMPLE_V, false)}</aside>`;
 const signInFields = () => db.mode === "demo"
   ? `<div class="demo-note mt-3">Demo mode. Once the site is connected to Firebase this becomes a "Continue with Google" button. For now, enter any BITS email.</div>
      <div class="field mt-3"><label for="dName">Name</label><input class="input" id="dName" name="name" placeholder="Your name"/></div>
@@ -807,7 +849,7 @@ views.dashboard = async () => {
       <hr/><a href="#validate">Validate an idea</a>${S.admin ? `<a href="#admin">Admin console</a>` : ""}<button data-act="signout">Sign out</button>
     </aside>
     <div>
-      <div class="spread" style="margin-bottom:2rem"><div><span class="label">${roleName(u)} · Dashboard</span><h2 class="mt-1">Hello, ${esc(String(u.name).split(" ")[0])}.</h2></div>
+      <div class="spread dash-hero"><div><span class="label">${roleName(u)} · Dashboard</span><h2 class="mt-1">Hello, ${esc(String(u.name).split(" ")[0])}.</h2></div>
         <a href="#matchmaking" class="btn btn-primary">${founder ? "Browse builders" : "Find ventures"}</a></div>
       ${main}
     </div>
