@@ -124,7 +124,7 @@ views.home = async () => {
     <div><b><em>1</em> profile</b><span>is all it takes here to reach every builder on campus.</span></div>
   </div></div>
 
-  <section class="section paper" style="margin-top:96px"><div class="container">
+  <section class="section"><div class="container">
     <div class="sec-head"><div><span class="label kicker">The problem</span><h2>Finding a co-founder shouldn't take a semester.</h2></div>
       <p>Interest and ability were never the issue on this campus. There just wasn't a place for people with ideas to meet the people who could build them.</p></div>
     <div class="compare">
@@ -980,9 +980,18 @@ async function render() {
   app.innerHTML = html;
   $$("#navLinks a").forEach((a) => a.classList.toggle("active", a.dataset.route === key || (key === "post" && a.dataset.route === "journal") || (key === "roadmap" && a.dataset.route === "about")));
   $("#navLinks").classList.remove("open"); $("#navToggle").setAttribute("aria-expanded", "false");
-  renderNav(); closeModal(); markAiFields();
+  renderNav(); closeModal(); markAiFields(); revealOnScroll();
   const titles = { matchmaking: "Matchmaking", validate: "Validate", opportunities: "Opportunities", events: "Events", journal: "Journal", resources: "Resources", about: "About", contact: "Contact", join: "Join", login: "Sign in", dashboard: "Dashboard", onboarding: "Profile setup", admin: "Admin" };
   document.title = (titles[key] ? titles[key] + " · " : "") + "FBC · Founders and Builders Collective";
+}
+// Ease public-page sections in as they scroll into view (not used in dashboards, where speed matters).
+let revealObs;
+function revealOnScroll() {
+  revealObs?.disconnect();
+  if (!("IntersectionObserver" in window) || app.querySelector(".shell")) return;
+  const els = $$("#app .sec-head, #app .statband, #app .compare, #app .bento, #app .how, #app .list.boxed, #app .feature, #app .cta-gold, #app .timeline, #app .cols, #app .grid.g2, #app .grid.g3, #app .post.featured");
+  revealObs = new IntersectionObserver((entries) => entries.forEach((en) => { if (en.isIntersecting) { en.target.classList.add("in"); revealObs.unobserve(en.target); } }), { rootMargin: "0px 0px -8% 0px" });
+  els.forEach((el) => { if (el.getBoundingClientRect().top < innerHeight) return; el.classList.add("reveal"); revealObs.observe(el); });
 }
 function markAiFields() {
   const rf = $("form[data-review]");
