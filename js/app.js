@@ -71,7 +71,7 @@ const SAMPLE_V = { name: "Voltway", pitch: "Battery-swap stations for campus e-s
 const productMock = (v = SAMPLE_V, floats = true) => {
   const logo = String(v.name || "FB").replace(/[^A-Za-z]/g, "").slice(0, 2).toUpperCase() || "FB";
   return `
-  <div class="mock rise d2" aria-hidden="true">
+  <div class="rise d2"><div class="mock tilt" aria-hidden="true">
     <div class="mock-window">
       <div class="mock-bar"><i></i><i></i><i></i><span>fbc / matchmaking / ${esc(String(v.name).toLowerCase())}</span></div>
       <div class="mock-body">
@@ -91,7 +91,7 @@ const productMock = (v = SAMPLE_V, floats = true) => {
     ${floats ? `
     <div class="mock-float mock-match"><div class="ring"><span>94%</span></div><div><small>Skill match</small><b>Arjun ↔ ${esc(v.name)}</b></div></div>
     <div class="mock-float mock-toast"><span class="dot"></span><p><b>Meera J.</b> applied to join ${esc(v.name)} as a content lead</p></div>` : ""}
-  </div>`;
+  </div></div>`;
 };
 
 /* ==========================================================
@@ -141,29 +141,29 @@ views.home = async () => {
     <div class="sec-head"><div><span class="label kicker">What you get</span><h2>Everything you need to go from <em>idea</em> to team.</h2></div>
       <p>One place for the whole journey: find people, test the idea, learn from founders, and get on stage.</p></div>
     <div class="bento">
-      <a class="tile t-lg" href="#matchmaking">
+      <a class="tile t-lg tilt" href="#matchmaking">
         <div class="art"><div class="people">
           ${[["Ananya Gupta", "Full-stack dev · 2nd year", 94], ["Arjun Nair", "Hardware / IoT · 4th year", 88], ["Meera Joshi", "Content & growth · 1st year", 81]].map(([n, s, p]) => `<div class="person-chip">${avatar(n)}<div><b>${n}</b><small>${s}</small></div><span class="pct">${p}%</span></div>`).join("")}
         </div></div>
         <div class="txt"><span class="label gold">Co-founder matchmaking</span><h3 class="mt-1">List your idea. The right builders find you.</h3><p>Founders post what they're building and who they need. Builders apply with one click, and founders review everyone from their dashboard.</p><span class="arrow-link">Browse ventures</span></div>
       </a>
-      <a class="tile t-md" href="#validate">
+      <a class="tile t-md tilt" href="#validate">
         <div class="art"><svg class="dial" viewBox="0 0 120 120"><circle cx="60" cy="60" r="50" fill="none" stroke="var(--line-2)" stroke-width="8"/><circle cx="60" cy="60" r="50" fill="none" stroke="var(--gold)" stroke-width="8" stroke-linecap="round" stroke-dasharray="314" stroke-dashoffset="69" transform="rotate(-90 60 60)"/><text x="60" y="72" text-anchor="middle" class="dial-num">78</text></svg></div>
         <div class="txt"><h3>Validate first</h3><p>A seven-question idea check, plus VistaDex for the deep dive.</p></div>
       </a>
-      <a class="tile t-md" href="#join">
+      <a class="tile t-md tilt" href="#join">
         <div class="art"><div class="prompt-art"><span class="k">"venture_name"</span>: <span class="v">"Voltway"</span><span class="ai-badge">AI</span><br/><span class="k">"stage"</span>: <span class="v">"Building MVP"</span><span class="ai-badge">AI</span><br/><span class="k">"skills_needed"</span>: [<span class="v">"Finance"</span>]</div></div>
         <div class="txt"><h3>Two-minute profile</h3><p>Let the AI assistant you already use fill it in. You check it before saving.</p></div>
       </a>
-      <a class="tile t-md" href="#events">
+      <a class="tile t-md tilt" href="#events">
         <div class="art"><div class="dates">${up.slice(0, 3).map(day).join("") || `<div class="date on"><b>4</b><small>Dec</small></div>`}</div></div>
         <div class="txt"><h3>Pitch nights and talks</h3><p>${next ? `Next: ${esc(next.title)}.` : "Workshops, founder firesides and community meets."}</p></div>
       </a>
-      <a class="tile t-md" href="#opportunities">
+      <a class="tile t-md tilt" href="#opportunities">
         <div class="art"><div class="roles-art">${opps.slice(0, 3).map((o) => `<div><span>${esc(o.title)}</span><small>${esc(o.type)}</small></div>`).join("")}</div></div>
         <div class="txt"><h3>Real startup work</h3><p>Internships, founder's office roles and projects.</p></div>
       </a>
-      <a class="tile t-md" href="#journal">
+      <a class="tile t-md tilt" href="#journal">
         <div class="art"><div class="pages-art">${ps.slice(0, 3).reverse().map((p) => `<div><small>${esc(p.cat)}</small>${esc(p.title)}</div>`).join("")}</div></div>
         <div class="txt"><h3>The Journal</h3><p>Startup stories, failures included, every two weeks.</p></div>
       </a>
@@ -963,6 +963,28 @@ function parseHash() {
   if (h.startsWith("journal-")) return { key: "post", param: h.slice(8) };
   return { key: h || "home", param: null };
 }
+
+/* ---------- 3D tilt: cards lean toward the cursor (mouse/trackpad only) ---------- */
+(() => {
+  if (!matchMedia("(hover: hover) and (pointer: fine)").matches || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  let current = null;
+  const reset = (el) => { el.classList.remove("tilting"); el.style.setProperty("--rx", "0deg"); el.style.setProperty("--ry", "0deg"); };
+  document.addEventListener("pointermove", (e) => {
+    const el = e.target.closest?.(".tilt");
+    if (current && current !== el) { reset(current); current = null; }
+    if (!el) return;
+    current = el;
+    const r = el.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+    const max = el.classList.contains("mock") ? 7 : el.classList.contains("t-lg") ? 3.5 : 6; // big tiles tilt less
+    el.classList.add("tilting");
+    el.style.setProperty("--ry", ((x - 0.5) * 2 * max).toFixed(2) + "deg");
+    el.style.setProperty("--rx", ((0.5 - y) * 2 * max).toFixed(2) + "deg");
+    el.style.setProperty("--gx", (x * 100).toFixed(1) + "%");
+    el.style.setProperty("--gy", (y * 100).toFixed(1) + "%");
+  }, { passive: true });
+  document.addEventListener("pointerleave", () => { if (current) { reset(current); current = null; } });
+})();
 
 /* ---------- sliding nav highlight ---------- */
 let lastKey = null;
