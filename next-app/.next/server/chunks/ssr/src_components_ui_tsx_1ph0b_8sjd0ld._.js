@@ -1,0 +1,21 @@
+module.exports=[40446,9311,a=>{"use strict";var b=a.i(7997);a.i(95936),[{id:"first-100-users",cat:"Startup Story",title:"How one campus startup found its first 100 users without a marketing budget",author:"FBC Research Team",date:"2026-11-18",read:"7 min",featured:!0,published:!0,excerpt:"A breakdown of the scrappy, unscalable things that actually worked, and the two that wasted a month."},{id:"team-stage",cat:"Failure Files",title:"Why most student startups die at the team stage, not the idea stage",author:"FBC Research Team",date:"2026-11-10",read:"6 min",published:!0,excerpt:"Co-founder mismatch, unclear commitment and the equity talk nobody wants to have."},{id:"tam-sam-som",cat:"Analysis",title:"TAM, SAM, SOM without the hand-waving",author:"FBC Research Team",date:"2026-11-02",read:"5 min",published:!0,excerpt:"A practical way to size your market that won't make a judge roll their eyes."},{id:"brief-01",cat:"Newsletter",title:"The Builder's Brief #01",author:"FBC",date:"2026-10-28",read:"4 min",published:!0,excerpt:"Three founder interviews, one framework, and what's coming up at FBC."},{id:"unit-economics",cat:"Analysis",title:"Unit economics for people who hate spreadsheets",author:"FBC Research Team",date:"2026-10-20",read:"8 min",published:!0,excerpt:"CAC, LTV and contribution margin, explained with a chai stall."},{id:"be-open",cat:"Startup Story",title:"Be open about your idea: why stealth mode hurts student founders",author:"Nitish Rathi",date:"2026-10-12",read:"4 min",published:!0,excerpt:"People can only join you if they know what you're building. Execution matters most."}].map(a=>{let b;return{...a,body:(b=a.excerpt,`${b}
+
+*Sample article. The Research & Knowledge team will replace this with the real story.*
+
+## The problem
+
+Every story starts with a problem someone actually had. We look at how the founders spotted it and how they knew it was worth solving.
+
+> The idea matters, but execution matters most.
+
+## Business model and market
+
+How the company makes money, how big the opportunity really is, and who else was competing for it.
+
+## What went wrong, and what we can learn
+
+- The decision that almost killed the company
+- What they would do differently
+- One takeaway for student founders`)}}),a.s(["X",0,[{phase:"Phase 0",title:"The spark",when:"Sep 2026",status:"done",items:["Community invitation and join form","WhatsApp community launched","First meetup with 3 core members"]},{phase:"Phase 1",title:"Matchmaking v1",when:"Oct–Nov 2026",status:"done",items:["Co-founder matchmaking form","Founder profiles shared with the community"]},{phase:"Phase 2",title:"Pitch & platform",when:"Dec 2026",status:"now",items:["Pitch Night for matchmaking founders","This website: profiles, matchmaking, opportunities","Recruit more core members"]},{phase:"Phase 3",title:"Learn & publish",when:"Jan–Mar 2027",status:"next",items:["Workshop series: validation, finance, fundraising","Startup Stories newsletter, every two weeks","Founder fireside sessions"]},{phase:"Phase 4",title:"Build & grow",when:"Apr–Jun 2027",status:"next",items:["Startup-building challenge","Internal demo day with external evaluators","Startup opportunity partnerships"]},{phase:"Phase 5",title:"Beyond campus",when:"2027–28",status:"next",items:["Flagship annual entrepreneurship event","Collaboration across BITS campuses","Incubator and investor network"]}],"D",0,[{name:"Nitish Rathi",role:"Founder"},{name:"Nakul Nandwana",role:"Core member"},{name:"Devansh Garg",role:"Core member"}]],9311),a.s(["E",0,function({name:a,photo:c,className:d=""}){return(0,b.jsx)("span",{className:`avatar ${d}`,children:c?(0,b.jsx)("img",{src:c,alt:"",referrerPolicy:"no-referrer"}):((a="")=>String(a).split(/\s+/).filter(Boolean).map(a=>a[0]).slice(0,2).join("").toUpperCase()||"?")(a)})},"x",0,function(){return(0,b.jsx)("div",{className:"loading",children:"Loading"})},"r",0,function({label:a,title:c,lead:d,children:e}){return(0,b.jsx)("section",{className:"page-head",children:(0,b.jsxs)("div",{className:"container",children:[(0,b.jsx)("span",{className:"label",children:a}),(0,b.jsx)("h1",{children:c}),d&&(0,b.jsx)("p",{className:"lead",children:d}),e]})})}],40446)}];
+
+//# sourceMappingURL=src_components_ui_tsx_1ph0b_8sjd0ld._.js.map

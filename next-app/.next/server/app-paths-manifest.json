@@ -1,0 +1,19 @@
+{
+  "/_global-error/page": "app/_global-error/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/about/page": "app/about/page.js",
+  "/admin/page": "app/admin/page.js",
+  "/contact/page": "app/contact/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/events/page": "app/events/page.js",
+  "/join/page": "app/join/page.js",
+  "/journal/page": "app/journal/page.js",
+  "/journal/post/page": "app/journal/post/page.js",
+  "/login/page": "app/login/page.js",
+  "/matchmaking/page": "app/matchmaking/page.js",
+  "/onboarding/page": "app/onboarding/page.js",
+  "/opportunities/page": "app/opportunities/page.js",
+  "/page": "app/page.js",
+  "/resources/page": "app/resources/page.js",
+  "/validate/page": "app/validate/page.js"
+}

@@ -1,0 +1,19 @@
+{
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/about/page": "/about",
+  "/admin/page": "/admin",
+  "/contact/page": "/contact",
+  "/dashboard/page": "/dashboard",
+  "/events/page": "/events",
+  "/join/page": "/join",
+  "/journal/page": "/journal",
+  "/journal/post/page": "/journal/post",
+  "/login/page": "/login",
+  "/matchmaking/page": "/matchmaking",
+  "/onboarding/page": "/onboarding",
+  "/opportunities/page": "/opportunities",
+  "/page": "/",
+  "/resources/page": "/resources",
+  "/validate/page": "/validate"
+}

@@ -3,7 +3,7 @@
    The member copies a prompt into their own chatbot, then pastes
    the reply back. Everything runs in the browser.
    ========================================================== */
-import { DOMAINS, SKILLS, STAGES, AVAIL, EQUITY, LOOKING } from "./content.js?v=202611230646";
+import { DOMAINS, SKILLS, STAGES, AVAIL, EQUITY, LOOKING } from "./content.js?v=202611230907";
 
 export const isFounder = (u) => u?.role === "founder";
 export const roleName = (u) => (isFounder(u) ? "Founder" : u?.role === "builder" ? "Builder" : "Explorer");

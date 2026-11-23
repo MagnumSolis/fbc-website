@@ -1,0 +1,33 @@
+1:"$Sreact.fragment"
+2:"/_next/static/chunks/29748f-dbzygl.js"
+3:"/_next/static/chunks/2j8us5i2u2g19.js"
+4:I[1661,["$2","$3"],"Providers"]
+5:I[84834,["$2","$3"],"Nav"]
+6:I[39756,["$2","$3"],"default"]
+7:I[37457,["$2","$3"],"default"]
+8:I[22016,["$2","$3"],""]
+9:I[13642,["$2","$3"],"Footer"]
+a:I[97866,["$2","$3"],"Effects"]
+11:I[97367,["$2","$3"],"OutletBoundary"]
+12:"$Sreact.suspense"
+15:"ViewportBoundary"
+16:I[97367,["$2","$3"],"$15"]
+17:"MetadataBoundary"
+18:I[97367,["$2","$3"],"$17"]
+19:I[27201,["$2","$3"],"IconMark"]
+:HL["/_next/static/chunks/1uhm8gnuhs7ft.css","style"]
+c:X
+f:X
+f:C
+10:[["children",{"s":"__PAGE__","h":160,"d":{"r":["$","$1","c",{"children":[["$","section",null,{"className":"section","children":["$","div",null,{"className":"container","children":[["$","span",null,{"className":"label","children":"404"}],["$","h1",null,{"className":"mt-2","children":"Not built yet."}],["$","p",null,{"className":"lead mt-3","children":"This page doesn't exist. Fitting, for a builders' club."}],["$","$L8",null,{"href":"/","className":"btn btn-primary mt-4","children":"Back home"}]]}]}],null,["$","$L11",null,{"children":["$","$12",null,{"name":"Next.MetadataOutlet","children":"$@13"}]}]]}],"p":"$@14","v":null,"s":"$c"}}]]
+d:[["children",{"s":"/_not-found","h":96,"d":{"r":["$","$1","c",{"children":[null,["$","$L6",null,{"parallelRouterKey":"children","template":["$","$L7",null,{}]}]]}],"p":"$@e","v":"$f","s":"$c"},"c":"$Q10"}]]
+0:{"t":{"t":{"s":"","h":80,"d":{"r":["$","$1","c",{"children":[[["$","link","0",{"rel":"stylesheet","href":"/_next/static/chunks/1uhm8gnuhs7ft.css","precedence":"next"}],["$","script","script-0",{"src":"/_next/static/chunks/29748f-dbzygl.js","async":true}],["$","script","script-1",{"src":"/_next/static/chunks/2j8us5i2u2g19.js","async":true}]],["$","html",null,{"lang":"en","className":"aR0q7G_variable f4k-Ea_variable v8BP8G_variable","children":["$","body",null,{"children":[["$","div",null,{"className":"blobs","aria-hidden":"true","children":[["$","i",null,{}],["$","i",null,{}],["$","i",null,{}]]}],["$","div",null,{"className":"arc","aria-hidden":"true"}],["$","$L4",null,{"children":[["$","$L5",null,{}],["$","main",null,{"id":"main","children":["$","$L6",null,{"parallelRouterKey":"children","template":["$","$L7",null,{}],"notFound":[["$","section",null,{"className":"section","children":["$","div",null,{"className":"container","children":[["$","span",null,{"className":"label","children":"404"}],["$","h1",null,{"className":"mt-2","children":"Not built yet."}],["$","p",null,{"className":"lead mt-3","children":"This page doesn't exist. Fitting, for a builders' club."}],["$","$L8",null,{"href":"/","className":"btn btn-primary mt-4","children":"Back home"}]]}]}],[]]}]}],["$","$L9",null,{}],["$","$La",null,{}]]}]]}]}]]}],"p":"$@b","v":null,"s":"$c"},"c":"$Qd"},"h":{"r":["$","$1","h",{"children":[["$","meta",null,{"name":"robots","content":"noindex"}],["$","$L16",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}],["$","meta","2",{"name":"theme-color","content":"#0B0B0C"}]]}],["$","$L18",null,{"children":[["$","div",null,{"hidden":true,"children":["$","$12",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"FBC · Founders and Builders Collective · BITS Pilani"}],["$","meta","1",{"name":"description","content":"A student startup community at BITS Pilani. Find a co-founder, join a startup, validate your idea, and pitch. Free for every BITSian."}],["$","meta","2",{"property":"og:title","content":"FBC · Find the people to build it with"}],["$","meta","3",{"property":"og:description","content":"A student startup community at BITS Pilani. Find a co-founder, join a startup, validate your idea, and pitch. Free for every BITSian."}],["$","meta","4",{"property":"og:url","content":"https://magnumsolis.github.io/fbc-website/"}],["$","meta","5",{"property":"og:site_name","content":"Founders and Builders Collective"}],["$","meta","6",{"property":"og:image","content":"https://magnumsolis.github.io/fbc-website/og.jpg"}],["$","meta","7",{"property":"og:image:width","content":"1200"}],["$","meta","8",{"property":"og:image:height","content":"630"}],["$","meta","9",{"property":"og:image:alt","content":"FBC: Find the people to build it with."}],["$","meta","10",{"property":"og:type","content":"website"}],["$","meta","11",{"name":"twitter:card","content":"summary_large_image"}],["$","meta","12",{"name":"twitter:title","content":"FBC · Find the people to build it with"}],["$","meta","13",{"name":"twitter:description","content":"A student startup community at BITS Pilani. Find a co-founder, join a startup, validate your idea, and pitch. Free for every BITSian."}],["$","meta","14",{"name":"twitter:image","content":"https://magnumsolis.github.io/fbc-website/og.jpg"}],["$","link","15",{"rel":"icon","href":"favicon.png"}],["$","link","16",{"rel":"apple-touch-icon","href":"apple-touch-icon.png"}],["$","$L19","17",{}]]}]}],null]}],["$","meta",null,{"name":"next-size-adjust","content":""}]]}],"p":"$@1a","v":null,"s":"$c"}},"a":"$@1b","u":"$@1c","b":"_rEJdgepw5aGoZjXfz7wb"}
+13:null
+c:300
+1c:true
+c:C
+1b:0
+e:"$undefined"
+b:"$undefined"
+1a:"$undefined"
+14:"$undefined"

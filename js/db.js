@@ -17,8 +17,8 @@
      settings/site                   links, announcement, VistaDex copy
      admins/{email}                  who can use the admin console
    ========================================================== */
-import { config } from "./config.js?v=202611230646";
-import { SEED } from "./content.js?v=202611230646";
+import { config } from "./config.js?v=202611230907";
+import { SEED } from "./content.js?v=202611230907";
 
 const PUBLIC_FILTER = { ventures: ["status", "live"], events: ["published", true], opportunities: ["status", "live"], posts: ["published", true] };
 const SEEDABLE = ["events", "opportunities", "posts", "resources"];
