@@ -6,6 +6,8 @@ The website of the **Founders and Builders Collective**, a student entrepreneurs
 
 Plain HTML, CSS and JavaScript (ES modules). No build step: edit a file, push, done.
 
+**Taking over the project?** Start with **[HANDOFF.md](HANDOFF.md)**: status, architecture, go-live checklist, custom domain, scaling and backlog.
+
 ## Two modes
 - **Demo** (default, `firebase: null` in `js/config.js`): fully clickable, data saved only in the visitor's browser. The first account you create in a browser is an admin, so you can explore the console.
 - **Live**: Firebase Auth (Google, BITS accounts only) + Cloud Firestore. Follow **[SETUP.md](SETUP.md)** (about 20 minutes, free).
