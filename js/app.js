@@ -59,10 +59,10 @@ const postCard = (p, featured = false) => `
 const cta = () => `
   <section class="section"><div class="container">
     <div class="cta-gold">
-      <span class="label" style="color:rgba(26,20,4,.6)">Free for every BITSian</span>
+      <span class="label gold">Free for every BITSian</span>
       <h2 class="mt-2">Have an idea? <em>Find your people.</em></h2>
       <p class="lead mt-3">Any branch, any year, with or without an idea. Sign in with your BITS Google account and you're in.</p>
-      <div class="row mt-4"><a href="#join" class="btn btn-dark btn-lg">Join FBC</a><a href="${esc(S.settings.whatsapp)}" target="_blank" rel="noopener" class="btn btn-lg">WhatsApp community</a></div>
+      <div class="row mt-4"><a href="#join" class="btn btn-primary btn-lg">Join FBC</a><a href="${esc(S.settings.whatsapp)}" target="_blank" rel="noopener" class="btn btn-lg">WhatsApp community</a></div>
     </div>
   </div></section>`;
 
@@ -124,7 +124,7 @@ views.home = async () => {
     <div><b><em>1</em> profile</b><span>is all it takes here to reach every builder on campus.</span></div>
   </div></div>
 
-  <section class="section paper" style="margin-top:112px"><div class="container">
+  <section class="section paper" style="margin-top:96px"><div class="container">
     <div class="sec-head"><div><span class="label kicker">The problem</span><h2>Finding a co-founder shouldn't take a semester.</h2></div>
       <p>Interest and ability were never the issue on this campus. There just wasn't a place for people with ideas to meet the people who could build them.</p></div>
     <div class="compare">
