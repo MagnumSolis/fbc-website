@@ -964,6 +964,24 @@ function parseHash() {
   return { key: h || "home", param: null };
 }
 
+/* ---------- sliding nav highlight ---------- */
+let lastKey = null;
+function moveInd(target, instant = false) {
+  const ind = $("#navInd");
+  if (!ind) return;
+  if (!target) { ind.classList.remove("show"); return; }
+  ind.classList.toggle("instant", instant);
+  ind.style.left = target.offsetLeft + "px";
+  ind.style.width = target.offsetWidth + "px";
+  ind.classList.add("show");
+  if (instant) requestAnimationFrame(() => ind.classList.remove("instant"));
+}
+const activeLink = () => $("#navLinks a.active");
+$("#navLinks").addEventListener("mouseover", (e) => { const a = e.target.closest("a"); if (a) moveInd(a); });
+$("#navLinks").addEventListener("mouseleave", () => moveInd(activeLink()));
+window.addEventListener("resize", () => moveInd(activeLink(), true));
+document.fonts?.ready.then(() => moveInd(activeLink(), true));
+
 async function render() {
   const token = ++renderToken;
   const { key, param } = parseHash();
@@ -978,8 +996,15 @@ async function render() {
   clearTimeout(slow);
   if (token !== renderToken) return;
   app.innerHTML = html;
+  // soft fade between pages (not when re-rendering the same page, e.g. switching dashboard tabs)
+  if (key !== lastKey && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    app.animate([{ opacity: 0, transform: "translateY(8px)" }, { opacity: 1, transform: "none" }], { duration: 320, easing: "cubic-bezier(.22,1,.36,1)" });
+  }
+  const firstRender = lastKey === null;
+  lastKey = key;
   $$("#navLinks a").forEach((a) => a.classList.toggle("active", a.dataset.route === key || (key === "post" && a.dataset.route === "journal") || (key === "roadmap" && a.dataset.route === "about")));
   $("#navLinks").classList.remove("open"); $("#navToggle").setAttribute("aria-expanded", "false");
+  moveInd(activeLink(), firstRender);
   renderNav(); closeModal(); markAiFields(); revealOnScroll();
   const titles = { matchmaking: "Matchmaking", validate: "Validate", opportunities: "Opportunities", events: "Events", journal: "Journal", resources: "Resources", about: "About", contact: "Contact", join: "Join", login: "Sign in", dashboard: "Dashboard", onboarding: "Profile setup", admin: "Admin" };
   document.title = (titles[key] ? titles[key] + " · " : "") + "FBC · Founders and Builders Collective";
