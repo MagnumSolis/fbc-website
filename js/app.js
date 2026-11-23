@@ -2,11 +2,11 @@
    FBC website: router, pages, sign-in, onboarding, dashboard.
    Admin console lives in admin.js. Data access in db.js.
    ========================================================== */
-import { db, isAllowedEmail } from "./db.js?v=202611230611";
-import * as C from "./content.js?v=202611230611";
-import { aiPrompt, aiSample, parseAiReply, FIELD_LABEL, isFounder, roleName } from "./ai.js?v=202611230611";
-import { S, $, $$, esc, fmtDate, parseDay, byDateDesc, upcoming, past, stageBar, avatar, dots, toast, openModal, closeModal, md, GOOGLE_ICON, ICON } from "./ui.js?v=202611230611";
-import { adminView, adminActions, adminForms, adminChange } from "./admin.js?v=202611230611";
+import { db, isAllowedEmail } from "./db.js?v=202611230646";
+import * as C from "./content.js?v=202611230646";
+import { aiPrompt, aiSample, parseAiReply, FIELD_LABEL, isFounder, roleName } from "./ai.js?v=202611230646";
+import { S, $, $$, esc, fmtDate, parseDay, byDateDesc, upcoming, past, stageBar, avatar, dots, toast, openModal, closeModal, md, GOOGLE_ICON, ICON } from "./ui.js?v=202611230646";
+import { adminView, adminActions, adminForms, adminChange } from "./admin.js?v=202611230646";
 
 const app = $("#app");
 const views = {};

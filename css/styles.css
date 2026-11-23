@@ -724,3 +724,17 @@ html, body { overflow-x: clip; }
   .dash-hero { padding: 1.5rem; }
 }
 @media (prefers-reduced-motion: reduce) { .blobs i { animation: none; } }
+
+/* Hero product preview: darker "smoked" glass so it reads as a solid object
+   (the background arc and glow no longer show through) */
+.mock .mock-window {
+  background: linear-gradient(180deg, rgba(255,246,228,.06), rgba(255,246,228,.012) 40%), rgba(13,11,8,.90);
+  border-color: rgba(255,240,210,.12);
+  box-shadow: inset 0 1px 0 rgba(255,250,235,.09), 0 50px 100px -36px rgba(0,0,0,.95), 0 0 0 1px rgba(0,0,0,.35);
+}
+.mock .mock-float {
+  background: linear-gradient(180deg, rgba(255,246,228,.07), rgba(255,246,228,.015) 50%), rgba(18,15,11,.93);
+  border-color: rgba(255,240,210,.14);
+  box-shadow: inset 0 1px 0 rgba(255,250,235,.10), 0 30px 60px -20px rgba(0,0,0,.9);
+}
+.mock .mock-venture { background: rgba(255,240,210,.04); border-color: rgba(255,240,210,.08); }
