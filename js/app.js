@@ -119,8 +119,8 @@ views.home = async () => {
   </div></section>
 
   <div class="container"><div class="statband">
-    <div><b>1,200</b><span>students join BITS Pilani every year, and many arrive wanting to build something.</span></div>
-    <div><b>20–25</b><span>seats a year in established clubs, for the hundreds who apply.</span></div>
+    <div><b data-count="1200">1,200</b><span>students join BITS Pilani every year, and many arrive wanting to build something.</span></div>
+    <div><b><span data-count="20">20</span>–<span data-count="25">25</span></b><span>seats a year in established clubs, for the hundreds who apply.</span></div>
     <div><b><em>1</em> profile</b><span>is all it takes here to reach every builder on campus.</span></div>
   </div></div>
 
@@ -1005,9 +1005,31 @@ async function render() {
   $$("#navLinks a").forEach((a) => a.classList.toggle("active", a.dataset.route === key || (key === "post" && a.dataset.route === "journal") || (key === "roadmap" && a.dataset.route === "about")));
   $("#navLinks").classList.remove("open"); $("#navToggle").setAttribute("aria-expanded", "false");
   moveInd(activeLink(), firstRender);
-  renderNav(); closeModal(); markAiFields(); revealOnScroll();
+  renderNav(); closeModal(); markAiFields(); revealOnScroll(); countUp();
   const titles = { matchmaking: "Matchmaking", validate: "Validate", opportunities: "Opportunities", events: "Events", journal: "Journal", resources: "Resources", about: "About", contact: "Contact", join: "Join", login: "Sign in", dashboard: "Dashboard", onboarding: "Profile setup", admin: "Admin" };
   document.title = (titles[key] ? titles[key] + " · " : "") + "FBC · Founders and Builders Collective";
+}
+// Numbers count up from zero the first time they scroll into view.
+// Works for [data-count] elements and for whole-number stat cards (e.g. "12", "50%").
+let countObs;
+function countUp() {
+  countObs?.disconnect();
+  if (!("IntersectionObserver" in window) || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const els = $$("#app [data-count], #app .stat > b").filter((el) => /^\d[\d,]*%?$/.test(el.textContent.trim()) && !el.querySelector("[data-count]"));
+  const run = (el) => {
+    const raw = el.textContent.trim(), suffix = raw.endsWith("%") ? "%" : "";
+    const end = Number(el.dataset.count ?? raw.replace(/[^\d]/g, ""));
+    if (!end) return;
+    const t0 = performance.now(), dur = end > 100 ? 1400 : 900;
+    const tick = (t) => {
+      const k = Math.min(1, (t - t0) / dur), v = Math.round(end * (1 - Math.pow(1 - k, 3)));
+      el.textContent = v.toLocaleString("en-IN") + suffix;
+      if (k < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  };
+  countObs = new IntersectionObserver((entries) => entries.forEach((en) => { if (en.isIntersecting) { run(en.target); countObs.unobserve(en.target); } }), { threshold: 0.6 });
+  els.forEach((el) => countObs.observe(el));
 }
 // Ease public-page sections in as they scroll into view (not used in dashboards, where speed matters).
 let revealObs;

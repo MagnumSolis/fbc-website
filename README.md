@@ -29,4 +29,6 @@ Plain HTML, CSS and JavaScript (ES modules). No build step: edit a file, push, d
 | `tests/rules.test.mjs` | 20 tests for the security rules (`npm run test:rules`) |
 
 ## Design
-One continuous warm-dark canvas with soft gold light, brand gold `#F2B630`, a code-built product preview in the hero, and a bento feature grid. Instrument Serif for headlines, Inter for text, IBM Plex Mono for labels. One interaction colour (violet `#A78BFA`) for hover, focus and active states; compare others with `?accent=teal`, `?accent=ember` or `?accent=ice` on the URL.
+One continuous warm-dark canvas with soft gold light, brand gold `#F2B630`, a code-built product preview in the hero, and a bento feature grid. Instrument Serif for headlines, Inter for text, IBM Plex Mono for labels. One interaction colour (azure `#7DA8FF`) for hover, focus and active states; compare others with `?accent=violet`, `?accent=teal` or `?accent=ember` on the URL.
+
+Link previews use `assets/og.jpg` (1200×630). The `og:` tags in `index.html` point at the GitHub Pages address; update them if the site moves to a custom domain.
